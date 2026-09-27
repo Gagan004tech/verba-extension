@@ -36,6 +36,18 @@
       border-radius: 4px;
       min-height: 48px;
     }
+    #intent-json {
+      margin-top: 12px;
+      padding: 12px;
+      background: #1e1e1e;
+      color: #9cdcfe;
+      border-radius: 4px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 24px;
+    }
   </style>
 </head>
 <body>
@@ -43,7 +55,8 @@
   <button id="toggle-mic">Start Listening</button>
   <div id="status">Ready</div>
   <div id="transcript">Spoken commands will appear here...</div>
+  <div id="intent-json">Parsed intent JSON will appear here...</div>
 
-  <script src="index.js"></script>
+  <script type="module" src="index.js"></script>
 </body>
 </html>

@@ -23,19 +23,7 @@
 <body>
   <h2>Allow Microphone for VERBA</h2>
   <p>Chrome requires granting microphone permissions in a dedicated tab before the side panel can access it.</p>
-  <button id="grant-btn">Allow Microphone Access</button>
-
-  <script>
-    document.getElementById("grant-btn").addEventListener("click", async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((track) => track.stop());
-        alert("Microphone permission granted! You can now close this tab and return to the side panel.");
-        window.close();
-      } catch (err) {
-        alert("Permission denied or microphone not found: " + err.message);
-      }
-    });
-  </script>
+    <button id="grant-btn">Allow Microphone Access</button>
+  <script src="permission.js"></script>
 </body>
 </html>
