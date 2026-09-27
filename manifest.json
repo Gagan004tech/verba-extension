@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "VERBA - Voice Assistant",
+  "version": "1.0.0",
+  "description": "Voice-driven form-filling assistant",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_title": "Open VERBA Assistant"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+V",
+        "linux": "Ctrl+Shift+V"
+      },
+      "description": "Open VERBA side panel"
+    }
+  }
+}
