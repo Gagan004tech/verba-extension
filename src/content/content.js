@@ -27,15 +27,19 @@
         sendResponse({ ok: true, from: 'content-script', url: location.href });
         return false;
 
-      case MESSAGE_TYPES.SCAN_FIELDS:
-        // TODO (W2/W3): replace with real scanner + weighted labels
-        sendResponse({ ok: true, fields: scanFieldsStub() });
+            case MESSAGE_TYPES.SCAN_FIELDS: {
+        const fields = scanFieldsStub();
+        console.log('[VERBA][content] SCAN_FIELDS ->', fields);
+        sendResponse({ ok: true, fields });
         return false;
+      }
 
-      case MESSAGE_TYPES.FILL_FIELD:
-        // TODO (W4): replace with native-value injector
-        sendResponse(fillFieldStub(message.payload));
+      case MESSAGE_TYPES.FILL_FIELD: {
+        const result = fillFieldStub(message.payload);
+        console.log('[VERBA][content] FILL_FIELD', message.payload, '->', result);
+        sendResponse(result);
         return false;
+      }
 
       default:
         return false;

@@ -1,3 +1,5 @@
+import { MESSAGE_TYPES, createMessage } from "../shared/message-types.js";
+
 export class VoiceController {
   constructor() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -9,7 +11,7 @@ export class VoiceController {
     this.recognition.onresult = (event) => {
       const transcript = event.results[event.results.length - 1][0].transcript.trim();
       // Hand-off 3: Send transcript to Module B
-      chrome.runtime.sendMessage({ type: "TRANSCRIPT_STREAM", payload: { text: transcript } });
+      chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TRANSCRIPT_STREAM, { text: transcript }));
     };
 
     this.recognition.onerror = (err) => {

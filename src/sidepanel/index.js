@@ -1,9 +1,18 @@
+import { MESSAGE_TYPES, createMessage } from "../shared/message-types.js";
+
 const toggleBtn = document.getElementById("toggle-mic");
 const statusDiv = document.getElementById("status");
 const transcriptDiv = document.getElementById("transcript");
+const intentJsonDiv = document.getElementById("intent-json");
 
 let shouldBeListening = false;
 let recognition = null;
+
+// Manual text input is always available - it's not just a mic-failure
+// fallback, since Web Speech may simply be unsupported/blocked and the
+// side panel shouldn't be unusable while that's sorted out.
+enableManualInputFallback();
+console.log("[VERBA] Side panel loaded. Manual input ready.");
 
 // Initialize Web Speech API
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -25,16 +34,29 @@ function promptMicAuthorization() {
     <button id="request-perm-btn" style="margin-top: 8px; padding: 6px 12px; font-size: 12px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Authorize Mic</button>
   `;
   document.getElementById("request-perm-btn")?.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("src/sidepanel/permission.html") });
+    chrome.tabs.create({ url: chrome.runtime.getURL("src/sidepanel/permission.html") }).catch((err) => {
+      console.error("[VERBA] Failed to open permission tab:", err);
+    });
   });
   enableManualInputFallback();
 }
 
 // Listen for broker events (e.g., spoken readback requested by P3)
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === "SPEAK_CONFIRMATION" && message.payload?.text) {
+  // Listen for broker events (e.g., spoken readback requested by P3)
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === MESSAGE_TYPES.SPEAK_CONFIRMATION && message.payload?.text) {
     speakReadback(message.payload.text);
   }
+
+  // P2's parsed intent, broadcast from the background broker after every
+  // transcript - shown here as formatted JSON so it's visible without
+  // needing to open the service worker's own devtools.
+  if (message.type === MESSAGE_TYPES.INTENT_PARSED) {
+    intentJsonDiv.textContent = JSON.stringify(message.payload, null, 2);
+    console.log("[VERBA] INTENT_PARSED:", message.payload);
+  }
+});
 });
 
 if (!SpeechRecognition) {
@@ -56,10 +78,7 @@ if (!SpeechRecognition) {
     transcriptDiv.textContent = `Heard: "${text}"`;
 
     // Hand-off 3: Send live transcript stream to the message broker
-    chrome.runtime.sendMessage({
-      type: "TRANSCRIPT_STREAM",
-      payload: { text }
-    });
+    chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TRANSCRIPT_STREAM, { text }));
   };
 
   recognition.onerror = (event) => {
@@ -150,10 +169,7 @@ function enableManualInputFallback() {
       if (e.key === "Enter" && fallbackInput.value.trim() !== "") {
         const text = fallbackInput.value.trim();
         transcriptDiv.textContent = `Typed: "${text}"`;
-        chrome.runtime.sendMessage({
-          type: "TRANSCRIPT_STREAM",
-          payload: { text }
-        });
+        chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TRANSCRIPT_STREAM, { text }));
         fallbackInput.value = "";
       }
     });

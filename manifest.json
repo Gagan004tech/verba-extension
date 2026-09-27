@@ -16,7 +16,7 @@
   "background": {
     "service_worker": "src/background/service-worker.js"
   },
-  "side_panel": {
+    "side_panel": {
     "default_path": "src/sidepanel/index.html"
   },
   "content_scripts": [
@@ -25,6 +25,15 @@
       "js": ["src/content/content.js"],
       "run_at": "document_idle"
     }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+  {
+    "resources": ["src/sidepanel/permission.html", "src/sidepanel/permission.js"],
+    "matches": ["<all_urls>"]
+  }
   ],
   "commands": {
     "_execute_action": {
