@@ -44,6 +44,11 @@ export const MESSAGE_TYPES = Object.freeze({
   // .value + input event only for now, see content.js).
   FILL_FIELD: "FILL_FIELD",
 
+  // Content script (P3) -> background broker: the page's fillable fields
+  // changed (multi-step form, fields injected or shown after load).
+  // Payload: { url, count }. Sent by content.js's MutationObserver.
+  FIELDS_CHANGED: "FIELDS_CHANGED",
+
   // Background broker -> content script (P3): connectivity check, used by
   // requestScan/requestFill's tab-tracking fallback.
   PING: "PING",

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VERBA test 04 - multi-step, fields added later</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+  label { display: block; margin-top: 14px; font-weight: 600; }
+  input { width: 100%; padding: 8px; font-size: 16px; box-sizing: border-box; }
+  button { margin-top: 18px; padding: 8px 18px; font-size: 16px; }
+  .note { background: #fff8db; padding: 10px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>Multi-step form</h1>
+<p class="note">Step 1 has two fields. "Send OTP" replaces them with an OTP field after about a second.
+With the service worker console open you should see a
+<code>Page fields changed</code> line once the OTP step appears, and <code>requestScan()</code>
+should then list only the OTP field. Also test: fill a field, then edit it by hand - the green highlight should go away.</p>
+
+<div id="step1">
+  <label for="mobile">Mobile number</label>
+  <input id="mobile" name="mobile" type="tel">
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email">
+  <button type="button" id="next">Send OTP</button>
+</div>
+
+<div id="step2"></div>
+
+<script>
+  document.getElementById('next').addEventListener('click', function () {
+    setTimeout(function () {
+      document.getElementById('step1').remove();
+      document.getElementById('step2').innerHTML =
+        '<h2>Step 2</h2>' +
+        '<label for="otp">Enter the 6-digit OTP</label>' +
+        '<input id="otp" name="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code">' +
+        '<button type="button">Verify</button>';
+    }, 1000);
+  });
+</script>
+</body>
+</html>

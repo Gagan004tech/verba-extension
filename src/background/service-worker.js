@@ -1,6 +1,6 @@
 import { MESSAGE_TYPES, createMessage } from "../shared/message-types.js";
 import { parseIntent } from "../nlu/intent-parser.js";
-import { rankByJaroWinkler } from "../matching/jaro-winkler.js";
+import { jaroWinklerSimilarity } from "../matching/jaro-winkler.js";
 
 // Enable the side panel to open on action icon click
 chrome.sidePanel
@@ -46,6 +46,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log(`[VERBA] Content script ready on tab ${sender.tab.id} (${payload?.url ?? message.url})`);
       }
       sendResponse({ ok: true });
+      return false;
+
+    case MESSAGE_TYPES.FIELDS_CHANGED:
+      // P3 (W4): content.js's MutationObserver saw the page's fields change.
+      // Logged for now; Nov (OTP / multi-step state) will re-scan from here.
+      console.log(`[VERBA] Page fields changed on tab ${sender.tab?.id}: ${payload?.count} fillable field(s)`);
       return false;
 
     case MESSAGE_TYPES.SPEAK_CONFIRMATION:
@@ -141,25 +147,40 @@ async function handleFillFieldIntent(result) {
       return console.warn("[VERBA] SCAN_FIELDS returned no fields.");
     }
 
-    const candidateLabels = fields.map((f) => f.label || f.id);
-    const ranked = rankByJaroWinkler(field, candidateLabels);
-    console.log(`[VERBA] Jaro-Winkler ranking for "${field}":`, ranked);
+    // W3: each field now carries `candidates` (weighted label variants,
+    // e.g. ["full name", "name"]). Score a field by its best candidate,
+    // not just its single top label, so "name" can match "Full name".
+    const ranked = fields
+      .map((f) => {
+        const labels = f.candidates?.length ? f.candidates : [f.label || f.id].filter(Boolean);
+        let score = 0;
+        let label = null;
+        for (const l of labels) {
+          const s = jaroWinklerSimilarity(field, l);
+          if (s > score) { score = s; label = l; }
+        }
+        return { field: f, label, score };
+      })
+      .sort((a, b) => b.score - a.score);
+    console.log(
+      `[VERBA] Field ranking for "${field}":`,
+      ranked.slice(0, 5).map((r) => ({ label: r.label, score: +r.score.toFixed(2), selector: r.field.selector }))
+    );
     const best = ranked[0];
 
-    // Provisional threshold, same order of magnitude as the zero-shot
-    // classifier's - there's no tuned value for this yet since it's
-    // matching against synthetic id-based labels, not real page labels.
+    // Provisional threshold - still untuned (Nov W2-W3 task). Note that
+    // e.g. "pan" vs "phone" already scores ~0.72, so 0.55 is too low.
     if (!best || best.score < 0.55) {
       return console.warn(`[VERBA] No confident field match for "${field}". Best guess:`, best);
     }
 
-    const matchedField = fields.find((f) => (f.label || f.id) === best.label);
-    if (!matchedField?.id) {
-      return console.warn("[VERBA] Matched field has no usable id/selector:", matchedField);
+    const matchedField = best.field;
+    if (!matchedField.selector) {
+      return console.warn("[VERBA] Matched field has no selector:", matchedField);
     }
 
-    console.log(`[VERBA] Filling "#${matchedField.id}" with "${value}" (score ${best.score.toFixed(2)})`);
-    requestFill(`#${matchedField.id}`, value, tabId);
+    console.log(`[VERBA] Filling ${matchedField.selector} ("${best.label}") with "${value}" (score ${best.score.toFixed(2)})`);
+    requestFill(matchedField.selector, value, tabId);
   });
 }
 
@@ -192,3 +213,24 @@ function requestFill(selector, value, tabId = getTargetTabId()) {
 // expose for manual testing in the service-worker DevTools console
 self.requestScan = requestScan;
 self.requestFill = requestFill;
+
+// P3 (W3): dump each field's label candidates as JSON to hand to P2.
+// Usage in this DevTools console: requestLabelDump(), then
+// copy(JSON.stringify(lastDump, null, 2))
+function requestLabelDump(tabId = getTargetTabId()) {
+  if (!tabId) return console.warn("[VERBA] No content script has registered yet.");
+  chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.SCAN_FIELDS }, (r) => {
+    if (chrome.runtime.lastError || !r?.ok) {
+      return console.warn("[VERBA] dump failed:", chrome.runtime.lastError?.message || r?.error);
+    }
+    self.lastDump = {
+      url: r.url,
+      fields: r.fields.map((f) => ({
+        name: f.name, id: f.id, tag: f.tag, type: f.type,
+        label: f.label, candidates: f.candidates
+      }))
+    };
+    console.log("[VERBA] dump ready: run copy(JSON.stringify(lastDump, null, 2))");
+  });
+}
+self.requestLabelDump = requestLabelDump;
