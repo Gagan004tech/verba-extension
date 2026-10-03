@@ -1,6 +1,6 @@
 import { pipeline } from "@xenova/transformers";
 import "../shared/transformers-runtime.js";
-import { ZERO_SHOT_LABELS } from "./intent-dictionary.js";
+import { ZERO_SHOT_LABELS, ZERO_SHOT_LABEL_TO_INTENT } from "./intent-dictionary.js";
 
 const MODEL_ID = "Xenova/distilbert-base-uncased-mnli";
 
@@ -33,12 +33,13 @@ export async function classifyIntent(transcript) {
 
     const topLabel = result.labels[0];
     const topScore = result.scores[0];
+    const intent = ZERO_SHOT_LABEL_TO_INTENT[topLabel] ?? "UNKNOWN";
 
     if (topScore < CONFIDENCE_THRESHOLD) {
       return { intent: "UNKNOWN", confidence: topScore, source: "zero-shot", slots: {} };
     }
 
-    return { intent: topLabel, confidence: topScore, source: "zero-shot", slots: {} };
+    return { intent, confidence: topScore, source: "zero-shot", slots: {} };
   } catch (err) {
     console.error("[VERBA][NLU] Zero-shot classification failed:", err);
     return null;
