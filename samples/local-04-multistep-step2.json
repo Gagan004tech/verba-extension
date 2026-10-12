@@ -1,0 +1,17 @@
+{
+  "url": "test-forms/04-multistep-dynamic.html (step 2)",
+  "fields": [
+    {
+      "name": "otp",
+      "id": "otp",
+      "tag": "input",
+      "type": "text",
+      "label": "Enter the 6-digit OTP",
+      "candidates": [
+        "enter the 6-digit otp",
+        "one time code",
+        "otp"
+      ]
+    }
+  ]
+}

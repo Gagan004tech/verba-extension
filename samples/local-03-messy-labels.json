@@ -1,0 +1,150 @@
+{
+  "url": "test-forms/03-messy-labels.html",
+  "fields": [
+    {
+      "name": "fn",
+      "id": null,
+      "tag": "input",
+      "type": "text",
+      "label": "First name",
+      "candidates": [
+        "first name"
+      ]
+    },
+    {
+      "name": "pan_no",
+      "id": null,
+      "tag": "input",
+      "type": "text",
+      "label": "PAN Number",
+      "candidates": [
+        "pan number",
+        "pan no"
+      ]
+    },
+    {
+      "name": null,
+      "id": "x_81f3a9c2d4e5",
+      "tag": "input",
+      "type": "text",
+      "label": "Mobile",
+      "candidates": [
+        "mobile"
+      ]
+    },
+    {
+      "name": null,
+      "id": null,
+      "tag": "input",
+      "type": "text",
+      "label": "Aadhaar number",
+      "candidates": [
+        "aadhaar number"
+      ]
+    },
+    {
+      "name": null,
+      "id": ":r1:",
+      "tag": "input",
+      "type": "text",
+      "label": "Search",
+      "candidates": [
+        "search"
+      ]
+    },
+    {
+      "name": null,
+      "id": null,
+      "tag": "input",
+      "type": "text",
+      "label": "Enter your city",
+      "candidates": [
+        "enter your city"
+      ]
+    },
+    {
+      "name": "zip",
+      "id": null,
+      "tag": "input",
+      "type": "text",
+      "label": "Pincode",
+      "candidates": [
+        "pincode",
+        "zip"
+      ]
+    },
+    {
+      "name": null,
+      "id": null,
+      "tag": "input",
+      "type": "text",
+      "label": "given name",
+      "candidates": [
+        "given name"
+      ]
+    },
+    {
+      "name": "g",
+      "id": null,
+      "tag": "input",
+      "type": "radio",
+      "label": "Male",
+      "candidates": [
+        "male",
+        "gender"
+      ]
+    },
+    {
+      "name": "g",
+      "id": null,
+      "tag": "input",
+      "type": "radio",
+      "label": "Female",
+      "candidates": [
+        "female"
+      ]
+    },
+    {
+      "name": "terms",
+      "id": null,
+      "tag": "input",
+      "type": "checkbox",
+      "label": "I agree to the terms",
+      "candidates": [
+        "i agree to the terms",
+        "terms"
+      ]
+    },
+    {
+      "name": null,
+      "id": "dob",
+      "tag": "input",
+      "type": "date",
+      "label": "Date of birth",
+      "candidates": [
+        "date of birth",
+        "dob"
+      ]
+    },
+    {
+      "name": null,
+      "id": "state",
+      "tag": "select",
+      "type": "select",
+      "label": "State",
+      "candidates": [
+        "state"
+      ]
+    },
+    {
+      "name": "honeypot",
+      "id": null,
+      "tag": "input",
+      "type": "text",
+      "label": "honeypot",
+      "candidates": [
+        "honeypot"
+      ]
+    }
+  ]
+}
