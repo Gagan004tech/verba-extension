@@ -1,0 +1,48 @@
+{
+  "url": "test-forms/02-controlled-tracker.html",
+  "fields": [
+    {
+      "name": "fullName",
+      "id": "fullName",
+      "tag": "input",
+      "type": "text",
+      "label": "Full name",
+      "candidates": [
+        "full name",
+        "name"
+      ]
+    },
+    {
+      "name": "email",
+      "id": "email",
+      "tag": "input",
+      "type": "email",
+      "label": "Email address",
+      "candidates": [
+        "email address",
+        "email"
+      ]
+    },
+    {
+      "name": "mobile",
+      "id": "mobile",
+      "tag": "input",
+      "type": "tel",
+      "label": "Mobile number",
+      "candidates": [
+        "mobile number",
+        "mobile"
+      ]
+    },
+    {
+      "name": "city",
+      "id": "city",
+      "tag": "select",
+      "type": "select",
+      "label": "City",
+      "candidates": [
+        "city"
+      ]
+    }
+  ]
+}

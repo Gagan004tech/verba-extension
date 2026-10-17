@@ -1,0 +1,26 @@
+{
+  "url": "test-forms/04-multistep-dynamic.html (step 1)",
+  "fields": [
+    {
+      "name": "mobile",
+      "id": "mobile",
+      "tag": "input",
+      "type": "tel",
+      "label": "Mobile number",
+      "candidates": [
+        "mobile number",
+        "mobile"
+      ]
+    },
+    {
+      "name": "email",
+      "id": "email",
+      "tag": "input",
+      "type": "email",
+      "label": "Email",
+      "candidates": [
+        "email"
+      ]
+    }
+  ]
+}
