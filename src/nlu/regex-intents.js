@@ -93,8 +93,21 @@ export const REGEX_INTENTS = [
   // ---------------------------------------------------------------- FILL
   {
     intent: "FILL_FIELD",
-    // "fill name as Alex" | "full phone number with 9876543210" (mis-heard "fill")
-    pattern: new RegExp(`^${FILL_VERB}\\s+(?:in\\s+)?(.+?)\\s+(?:as|with)\\s+(.+)$`, "i"),
+    // "fill name as Alex" | "full phone number with 9876543210" | "enter pan at ABCDE 1 2 3 4" | "set email to test@test.com"
+    pattern: new RegExp(`^${FILL_VERB}\\s+(?:in\\s+|into\\s+)?(?:the\\s+)?(.+?)\\s+(?:as|with|at|to|is|=|\:)\\s+(.+)$`, "i"),
+    slots: (match) => ({ field: match[1].trim(), rawValue: match[2].trim() }),
+  },
+  {
+    intent: "FILL_FIELD",
+    // "enter first name John" | "fill phone 9876543210" | "type email alex@test.com" | "enter pan ABCDE 1234"
+    // When a fill verb is directly followed by a known field phrase, match the field and rest is value (no "as/with" required)
+    pattern: new RegExp(`^${FILL_VERB}\\s+(?:in\\s+)?(?:the\\s+|my\\s+)?(${KNOWN_FIELD_PHRASES.join("|")})\\s+(.+)$`, "i"),
+    slots: (match) => ({ field: match[1].trim(), rawValue: match[2].trim() }),
+  },
+  {
+    intent: "FILL_FIELD",
+    // "on the bar labelled ask Google or type URL enter artificial intelligence" | "in the search bar enter AI"
+    pattern: /^(?:in|on|at)\s+(?:the\s+)?(?:bar|field|box|input)?\s*(?:labelled|named|called)?\s+(.+)\s+(?:enter|type|fill|put|write|set)\s+(.+)$/i,
     slots: (match) => ({ field: match[1].trim(), rawValue: match[2].trim() }),
   },
   {

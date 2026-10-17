@@ -4,11 +4,10 @@ import { ZERO_SHOT_LABELS, ZERO_SHOT_LABEL_TO_INTENT } from "./intent-dictionary
 
 const MODEL_ID = "Xenova/distilbert-base-uncased-mnli";
 
-// Below this score we'd rather say "I didn't understand that" than act on
-// a low-confidence guess - the confirmation gate (Month 2) only comes
-// *after* we already picked FILL_FIELD/CLICK/etc., so guessing wrong here
-// is worse than admitting UNKNOWN.
-const CONFIDENCE_THRESHOLD = 0.55;
+// DistilBERT-MNLI distributes softmax probabilities across 30+ candidate hypothesis
+// labels (uniform baseline ~0.03). A top score >= 0.25 represents an overwhelming
+// probability relative to the candidate pool (often 8x-15x above random distribution).
+const CONFIDENCE_THRESHOLD = 0.25;
 
 let classifierPromise = null;
 

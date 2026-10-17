@@ -20,6 +20,37 @@ const PROFILE_PHRASES = [
 ];
 
 /**
+ * Formats values based on field semantics (e.g. uppercasing PAN numbers,
+ * collapsing speech-recognized spaces in codes like "A B C D 1 2 3 4").
+ *
+ * @param {string} field
+ * @param {string} value
+ * @returns {string}
+ */
+export function formatFieldValue(field, value) {
+  if (!value) return value;
+  const normField = (field || "").toLowerCase();
+  let formatted = value.trim();
+
+  // PAN numbers: alphanumeric, 10 characters (e.g. ABCDE1234F), uppercase, no spaces
+  if (normField.includes("pan")) {
+    return formatted.replace(/\s+/g, "").toUpperCase();
+  }
+
+  // OTP / Verification codes: digits only, collapse spaces from speech
+  if (normField.includes("otp") || normField.includes("code") || normField.includes("pin")) {
+    return formatted.replace(/\s+/g, "");
+  }
+
+  // Aadhaar / SSN / passport: remove spoken spaces, uppercase
+  if (normField.includes("aadhaar") || normField.includes("ssn") || normField.includes("passport")) {
+    return formatted.replace(/\s+/g, "").toUpperCase();
+  }
+
+  return formatted;
+}
+
+/**
  * @param {{field: string, rawValue: string|null, profileRef?: boolean}} slots
  *        raw slots as produced by regex-intents.js (or a zero-shot result
  *        that has already been coerced into this shape)
@@ -34,9 +65,12 @@ export function extractSlots(slots) {
     return { field, value: null, profileKey: resolveProfileKey(field) };
   }
 
+  const rawValue = slots.rawValue ? slots.rawValue.trim() : null;
+  const value = rawValue ? formatFieldValue(field, rawValue) : null;
+
   return {
     field,
-    value: slots.rawValue ? slots.rawValue.trim() : null,
+    value,
     profileKey: null,
   };
 }
@@ -73,7 +107,7 @@ function resolveProfileKey(field) {
 // before "as", and a naive first-match regex grabs "to be filled as
 // female" as the value instead of just "female". Taking whichever marker
 // occurs latest in the string consistently lands on the real value clause.
-const VALUE_MARKERS = [" as ", " with ", " should be ", " needs to be ", " need to be ", " has to be ", " have to be ", " to "];
+const VALUE_MARKERS = [" as ", " with ", " at ", " to ", " is ", " should be ", " needs to be ", " need to be ", " has to be ", " have to be "];
 
 /**
  * Best-effort FILL_FIELD slot extraction for transcripts the deterministic
@@ -128,5 +162,6 @@ export function extractSlotsLoosely(transcript) {
     }
   }
 
-  return { field, value, profileKey: null };
+  const formattedValue = value ? formatFieldValue(field, value) : null;
+  return { field, value: formattedValue, profileKey: null };
 }

@@ -65,8 +65,18 @@ export const SYNONYM_DICTIONARY = {
 
   // --- Misc ---------------------------------------------------------------
   comments: ["comments", "message", "remarks", "additional notes"],
-  subject: ["subject", "subject line"],
-  search: ["search query", "search term"],
+  search: [
+    "search",
+    "search query",
+    "search term",
+    "search bar",
+    "search box",
+    "search input",
+    "google search",
+    "ask google",
+    "ask google or type url",
+    "query",
+  ],
 };
 
 /** Canonical key -> lowercase phrase, built once for O(1) lookups. */

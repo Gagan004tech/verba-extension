@@ -27,6 +27,16 @@ export const MATCH_THRESHOLD = 0.65;
 /**
  * Normalizes input text for comparison (lowercase, trimmed, collapsed whitespace).
  */
+export function stripFormPrefixes(text) {
+  return (text || "")
+    .replace(/^(?:please\s+)?(?:enter|type|input|select|choose|provide|fill\s+in|fill|write)\s+(?:your\s+|the\s+)?/i, "")
+    .replace(/^(?:your|the|my)\s+/i, "")
+    .trim();
+}
+
+/**
+ * Normalizes input text for comparison (lowercase, trimmed, collapsed whitespace).
+ */
 export function normalizeLabel(text) {
   return (text || "")
     .toLowerCase()
@@ -45,17 +55,18 @@ export function normalizeLabel(text) {
 export function computeSynonymScore(spokenPhrase, candidateLabel) {
   const normSpoken = normalizeLabel(spokenPhrase);
   const normCandidate = normalizeLabel(candidateLabel);
+  const strippedCandidate = normalizeLabel(stripFormPrefixes(candidateLabel));
 
   if (!normSpoken || !normCandidate) {
     return { score: 0, canonical: null };
   }
 
-  if (normSpoken === normCandidate) {
+  if (normSpoken === normCandidate || normSpoken === strippedCandidate) {
     return { score: 1.0, canonical: resolveCanonicalField(normSpoken) };
   }
 
   const canonSpoken = resolveCanonicalField(normSpoken);
-  const canonCandidate = resolveCanonicalField(normCandidate);
+  const canonCandidate = resolveCanonicalField(normCandidate) || resolveCanonicalField(strippedCandidate);
 
   // Both map to the exact same canonical key (e.g. "pan" and "permanent account number")
   if (canonSpoken && canonCandidate && canonSpoken === canonCandidate) {
@@ -105,14 +116,22 @@ export function computeSynonymScore(spokenPhrase, candidateLabel) {
 export function computeLexicalScore(spokenPhrase, candidateLabel) {
   const normSpoken = normalizeLabel(spokenPhrase);
   const normCandidate = normalizeLabel(candidateLabel);
+  const strippedCandidate = normalizeLabel(stripFormPrefixes(candidateLabel));
 
-  let best = jaroWinklerSimilarity(normSpoken, normCandidate);
+  let best = Math.max(
+    jaroWinklerSimilarity(normSpoken, normCandidate),
+    jaroWinklerSimilarity(normSpoken, strippedCandidate)
+  );
 
   const canon = resolveCanonicalField(normSpoken);
   if (canon) {
     const synonyms = synonymsFor(canon);
     for (const syn of synonyms) {
-      const sim = jaroWinklerSimilarity(normalizeLabel(syn), normCandidate);
+      const normSyn = normalizeLabel(syn);
+      const sim = Math.max(
+        jaroWinklerSimilarity(normSyn, normCandidate),
+        jaroWinklerSimilarity(normSyn, strippedCandidate)
+      );
       if (sim > best) best = sim;
     }
   }
