@@ -32,8 +32,18 @@ export const INTENT_DICTIONARY = {
   },
   SUBMIT: {
     description: "Submit the current form.",
-    examples: ["submit", "submit the form", "send it"],
+    examples: ["submit", "submit the form", "send it", "finish", "complete the form"],
     zeroShotLabel: "submitting the current form",
+  },
+  CONFIRM: {
+    description: "Affirm, agree, or confirm a pending action or prompt.",
+    examples: ["yes", "confirm", "proceed", "sure", "correct", "yep", "ok", "go ahead", "affirmative", "do it"],
+    zeroShotLabel: "confirming, agreeing, or answering yes to proceed with an action",
+  },
+  CANCEL: {
+    description: "Cancel, deny, or abort a pending action or prompt.",
+    examples: ["no", "cancel", "stop", "abort", "don't", "deny", "nope", "negative", "never mind", "dismiss"],
+    zeroShotLabel: "canceling, aborting, or answering no to reject an action",
   },
 
   // --- Browser / page / media control --------------------------------

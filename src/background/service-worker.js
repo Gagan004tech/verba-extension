@@ -1,6 +1,6 @@
 import { MESSAGE_TYPES, createMessage } from "../shared/message-types.js";
-import { parseIntent } from "../nlu/intent-parser.js";
-import { jaroWinklerSimilarity } from "../matching/jaro-winkler.js";
+import { parseIntents, parseIntent } from "../nlu/intent-parser.js";
+import { rankFieldsFused, rankFieldsFast, MATCH_THRESHOLD } from "../matching/fused-matcher.js";
 
 // Enable the side panel to open on action icon click
 chrome.sidePanel
@@ -22,6 +22,11 @@ function getTargetTabId() {
   const [anyReady] = [...readyTabs];
   return anyReady ?? null;
 }
+
+// --- Safety Confirmation Gate State (Month 2) --------------------------
+// Intercepts sensitive fills and submit actions, speaks a prompt, and waits
+// for spoken "yes/confirm" or "no/cancel" before proceeding.
+let pendingConfirmation = null;
 
 // --- Message routing broker --------------------------------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -50,18 +55,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case MESSAGE_TYPES.FIELDS_CHANGED:
       // P3 (W4): content.js's MutationObserver saw the page's fields change.
-      // Logged for now; Nov (OTP / multi-step state) will re-scan from here.
       console.log(`[VERBA] Page fields changed on tab ${sender.tab?.id}: ${payload?.count} fillable field(s)`);
       return false;
 
     case MESSAGE_TYPES.SPEAK_CONFIRMATION:
-      // The side panel (src/sidepanel/index.js) already listens for this
-      // broadcast directly and calls speakReadback() itself - the broker
-      // doesn't need to do anything here. Nothing emits this yet: the
-      // match payload's requiresConfirmation flag that's meant to trigger
-      // it is Module C/D's Nov Week 3 handoff, not built in this repo.
-      // This case exists purely so it doesn't fall through to "Unknown
-      // message type" below.
+      // The side panel listens for this broadcast directly and calls speakReadback().
       return false;
 
     default:
@@ -71,48 +69,138 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
- * Module B entry point (P2): parse a transcript into an intent + slots,
- * then broadcast the result for the next stage of the pipeline.
+ * Module B entry point (P2): parse transcript into intents + slots,
+ * supports compound commands ("fill name as Alex and click submit"),
+ * and dispatches each intent sequentially through the full pipeline.
  *
  * @param {string} text
  */
 async function handleTranscript(text) {
-  const result = await parseIntent(text);
-  console.log("[VERBA][NLU] Parsed intent:", result);
+  const intentResults = await parseIntents(text);
+  console.log(`[VERBA][NLU] Parsed ${intentResults.length} intent(s):`, intentResults);
 
-  chrome.runtime
-    .sendMessage(createMessage(MESSAGE_TYPES.INTENT_PARSED, { transcript: text, ...result }))
-    .catch(() => {
-      // No listener in the side panel right now - safe to ignore.
-    });
+  for (const result of intentResults) {
+    chrome.runtime
+      .sendMessage(createMessage(MESSAGE_TYPES.INTENT_PARSED, { transcript: text, ...result }))
+      .catch(() => {
+        // Safe to ignore if side panel listener is not yet open
+      });
 
-  if (result.intent === "FILL_FIELD") {
-    handleFillFieldIntent(result);
+    await dispatchIntent(result, text);
   }
 }
 
 /**
- * The missing link between P2's NLU output and P3's content script:
- * takes a parsed FILL_FIELD intent, asks the active tab's content script
- * to scan the page (Module C), ranks the returned fields against the
- * spoken field description with P2's Jaro-Winkler utility, and tells the
- * content script to fill the best match (Module D execution).
+ * Dispatches an individual parsed intent through the pipeline.
  *
- * This is a first-cut wiring of pieces that already exist, not the
- * "full-pipeline" integration the roadmap schedules for Nov Week 4:
- *  - content.js's scanFieldsStub doesn't build real labels yet (its own
- *    TODO says "weighted label generator (W3)"), so matching falls back
- *    to each field's `id` attribute. Fields with no native `id` fall back
- *    to a synthetic "field-N" label that isn't a real selector, so they
- *    can't be targeted by FILL_FIELD yet - that's a gap in the stub
- *    scanner itself, not something patched over here.
- *  - "from my profile" commands (slots.profileKey set) are intentionally
- *    skipped below: vault.js only has encrypt()/decrypt(), no
- *    save/retrieve wired to chrome.storage yet, so there's no vault value
- *    to fetch.
- *  - The semantic embedding matcher and the CONFIRM/CANCEL safety gate
- *    aren't wired in here either, for the same reason - fuse those in
- *    once P3's real scanner and the confirmation flow land.
+ * @param {{ intent: string, confidence: number, source: string, slots: object }} result
+ * @param {string} rawTranscript
+ */
+async function dispatchIntent(result, rawTranscript) {
+  const { intent, slots } = result;
+
+  // 1. Check Confirmation Gate State
+  if (pendingConfirmation) {
+    if (intent === "CONFIRM") {
+      console.log("[VERBA][Gate] User confirmed action:", pendingConfirmation.action);
+      const actionToExecute = pendingConfirmation;
+      pendingConfirmation = null;
+
+      chrome.runtime
+        .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "confirmed", action: actionToExecute.action }))
+        .catch(() => {});
+
+      chrome.runtime
+        .sendMessage(createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, { text: "Action confirmed. Proceeding." }))
+        .catch(() => {});
+
+      if (actionToExecute.action === "SUBMIT") {
+        requestAction({ action: "SUBMIT" }, actionToExecute.tabId);
+      } else if (actionToExecute.action === "FILL_FIELD") {
+        requestFill(actionToExecute.selector, actionToExecute.value, actionToExecute.tabId);
+      }
+      return;
+    }
+
+    if (intent === "CANCEL") {
+      console.log("[VERBA][Gate] User cancelled action:", pendingConfirmation.action);
+      pendingConfirmation = null;
+
+      chrome.runtime
+        .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "cancelled" }))
+        .catch(() => {});
+
+      chrome.runtime
+        .sendMessage(createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, { text: "Action cancelled." }))
+        .catch(() => {});
+      return;
+    }
+  }
+
+  // 2. Intercept sensitive / final actions via Confirmation Gate
+  if (intent === "SUBMIT") {
+    const tabId = getTargetTabId();
+    pendingConfirmation = { action: "SUBMIT", tabId, timestamp: Date.now() };
+
+    chrome.runtime
+      .sendMessage(
+        createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, {
+          text: "Are you sure you want to submit the form? Say yes to confirm, or no to cancel.",
+        })
+      )
+      .catch(() => {});
+
+    chrome.runtime
+      .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_REQUIRED, { action: "SUBMIT" }))
+      .catch(() => {});
+    return;
+  }
+
+  // 3. Form field fill
+  if (intent === "FILL_FIELD") {
+    await handleFillFieldIntent(result);
+    return;
+  }
+
+  // 4. In-page click
+  if (intent === "CLICK") {
+    requestAction({ action: "CLICK", target: slots.target });
+    return;
+  }
+
+  // 5. Scroll commands
+  if (intent.startsWith("SCROLL_")) {
+    requestAction({ action: intent });
+    return;
+  }
+
+  // 6. Form reset / clear
+  if (intent === "RESET_FORM") {
+    requestAction({ action: "RESET_FORM" });
+    return;
+  }
+
+  if (intent === "CLEAR_FIELD") {
+    // Clear targeted field
+    const tabId = getTargetTabId();
+    if (tabId && slots.field) {
+      chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.SCAN_FIELDS }, async (scanResponse) => {
+        const fields = scanResponse?.fields || [];
+        const ranked = rankFieldsFast(slots.field, fields, { threshold: MATCH_THRESHOLD });
+        if (ranked.length > 0 && ranked[0].isConfident) {
+          requestFill(ranked[0].field.selector, "", tabId);
+        }
+      });
+    }
+    return;
+  }
+}
+
+/**
+ * Executes a parsed FILL_FIELD intent:
+ * Asks content script to scan the page (Module C),
+ * ranks fields using P2's Fused Matching Engine (synonym + Jaro-Winkler + semantic),
+ * and dispatches value injection (Module D).
  *
  * @param {{slots: {field: string, value: string|null, profileKey: string|null}}} result
  */
@@ -137,7 +225,7 @@ async function handleFillFieldIntent(result) {
     return;
   }
 
-  chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.SCAN_FIELDS }, (scanResponse) => {
+  chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.SCAN_FIELDS }, async (scanResponse) => {
     if (chrome.runtime.lastError) {
       return console.warn("[VERBA] SCAN_FIELDS failed:", chrome.runtime.lastError.message);
     }
@@ -147,30 +235,29 @@ async function handleFillFieldIntent(result) {
       return console.warn("[VERBA] SCAN_FIELDS returned no fields.");
     }
 
-    // W3: each field now carries `candidates` (weighted label variants,
-    // e.g. ["full name", "name"]). Score a field by its best candidate,
-    // not just its single top label, so "name" can match "Full name".
-    const ranked = fields
-      .map((f) => {
-        const labels = f.candidates?.length ? f.candidates : [f.label || f.id].filter(Boolean);
-        let score = 0;
-        let label = null;
-        for (const l of labels) {
-          const s = jaroWinklerSimilarity(field, l);
-          if (s > score) { score = s; label = l; }
-        }
-        return { field: f, label, score };
-      })
-      .sort((a, b) => b.score - a.score);
+    // Fused matching: combines custom synonym dictionary, Jaro-Winkler lexical
+    // similarity, and semantic embeddings via Transformers.js
+    let ranked;
+    try {
+      ranked = await rankFieldsFused(field, fields, { threshold: MATCH_THRESHOLD });
+    } catch (err) {
+      console.warn("[VERBA] Fallback to fast synchronous matching:", err);
+      ranked = rankFieldsFast(field, fields, { threshold: MATCH_THRESHOLD });
+    }
+
     console.log(
-      `[VERBA] Field ranking for "${field}":`,
-      ranked.slice(0, 5).map((r) => ({ label: r.label, score: +r.score.toFixed(2), selector: r.field.selector }))
+      `[VERBA] Fused field ranking for "${field}":`,
+      ranked.slice(0, 5).map((r) => ({
+        label: r.label,
+        score: +r.score.toFixed(3),
+        breakdown: r.breakdown,
+        selector: r.field.selector,
+      }))
     );
+
     const best = ranked[0];
 
-    // Provisional threshold - still untuned (Nov W2-W3 task). Note that
-    // e.g. "pan" vs "phone" already scores ~0.72, so 0.55 is too low.
-    if (!best || best.score < 0.55) {
+    if (!best || !best.isConfident) {
       return console.warn(`[VERBA] No confident field match for "${field}". Best guess:`, best);
     }
 
@@ -179,7 +266,7 @@ async function handleFillFieldIntent(result) {
       return console.warn("[VERBA] Matched field has no selector:", matchedField);
     }
 
-    console.log(`[VERBA] Filling ${matchedField.selector} ("${best.label}") with "${value}" (score ${best.score.toFixed(2)})`);
+    console.log(`[VERBA] Filling ${matchedField.selector} ("${best.label}") with "${value}" (score ${best.score.toFixed(3)})`);
     requestFill(matchedField.selector, value, tabId);
   });
 }
@@ -210,9 +297,22 @@ function requestFill(selector, value, tabId = getTargetTabId()) {
   );
 }
 
+function requestAction(payload, tabId = getTargetTabId()) {
+  if (!tabId) return console.warn("[VERBA] No content script has registered yet.");
+  chrome.tabs.sendMessage(
+    tabId,
+    { type: MESSAGE_TYPES.EXECUTE_ACTION, payload },
+    (response) => {
+      if (chrome.runtime.lastError) return console.warn("[VERBA] EXECUTE_ACTION failed:", chrome.runtime.lastError.message);
+      console.log("[VERBA] EXECUTE_ACTION response:", response);
+    }
+  );
+}
+
 // expose for manual testing in the service-worker DevTools console
 self.requestScan = requestScan;
 self.requestFill = requestFill;
+self.requestAction = requestAction;
 
 // P3 (W3): dump each field's label candidates as JSON to hand to P2.
 // Usage in this DevTools console: requestLabelDump(), then

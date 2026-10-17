@@ -83,6 +83,8 @@ const ACTION_CASES = {
   CLICK: ["click submit", "press the continue button", "tap on sign in", "hit submit", "select yes"],
   NAVIGATE: ["go to the contact page", "open google.com", "show me the pricing page", "take me to checkout"],
   SUBMIT: ["submit the form", "send it", "finish", "complete the form"],
+  CONFIRM: ["yes", "confirm", "proceed", "sure", "correct", "yep", "ok", "go ahead"],
+  CANCEL: ["no", "cancel", "stop", "abort", "don't", "deny", "never mind"],
   NEW_TAB: ["open a new tab", "start a new tab"],
   CLOSE_TAB: ["close this tab", "close the window"],
   NEXT_TAB: ["next tab", "switch to the next tab"],

@@ -19,6 +19,12 @@ export const MESSAGE_TYPES = Object.freeze({
   // (used for the confirmation-gate safety flow).
   SPEAK_CONFIRMATION: "SPEAK_CONFIRMATION",
 
+  // Background broker -> UI: signals that a pending action is awaiting user confirmation.
+  CONFIRMATION_REQUIRED: "CONFIRMATION_REQUIRED",
+
+  // Background broker -> UI: signals that user confirmed or cancelled the pending action.
+  CONFIRMATION_RESOLVED: "CONFIRMATION_RESOLVED",
+
   // NLU pipeline (P2) -> background broker / P3: the parsed result of a
   // transcript - intent name, confidence, source (regex | zero-shot),
   // and extracted slots.
@@ -43,6 +49,10 @@ export const MESSAGE_TYPES = Object.freeze({
   // (Module D execution, native-value injector not built yet - plain
   // .value + input event only for now, see content.js).
   FILL_FIELD: "FILL_FIELD",
+
+  // Background broker -> content script (P3): execute a general DOM action
+  // like CLICK or SUBMIT.
+  EXECUTE_ACTION: "EXECUTE_ACTION",
 
   // Content script (P3) -> background broker: the page's fillable fields
   // changed (multi-step form, fields injected or shown after load).

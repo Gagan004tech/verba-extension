@@ -34,7 +34,7 @@ export const SYNONYM_DICTIONARY = {
   addressLine2: ["address line 2", "apartment number", "unit number", "flat number"],
   city: ["city", "town"],
   state: ["state", "province"],
-  zipCode: ["zip code", "postal code", "pin code", "zipcode"],
+  zipCode: ["zip code", "postal code", "pin code", "pincode", "zipcode"],
   country: ["country", "nation"],
 
   // --- Account / security ----------------------------------------------
