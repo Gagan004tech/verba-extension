@@ -55,14 +55,16 @@ async function getTargetTabId() {
   }
 
   // 3. Content script was not responsive (e.g. extension was reloaded while tab stayed open)
-  // Auto-inject content.js dynamically using scripting API!
+  // Auto-inject content script dynamically using scripting API and the manifest's resolved path!
   try {
     if (chrome.scripting?.executeScript) {
+      const manifest = chrome.runtime.getManifest();
+      const contentScriptFiles = manifest?.content_scripts?.[0]?.js || ["src/content/content.js"];
       await chrome.scripting.executeScript({
         target: { tabId },
-        files: ["src/content/content.js"],
+        files: contentScriptFiles,
       });
-      console.log(`[VERBA] Auto-injected content script into tab ${tabId}`);
+      console.log(`[VERBA] Auto-injected content script (${contentScriptFiles.join(", ")}) into tab ${tabId}`);
       readyTabs.add(tabId);
       lastReadyTabId = tabId;
       await new Promise((r) => setTimeout(r, 100));
@@ -132,11 +134,21 @@ async function handleTranscript(text) {
   console.log(`[VERBA][NLU] Parsed ${intentResults.length} intent(s):`, intentResults);
 
   for (const result of intentResults) {
-    chrome.runtime
-      .sendMessage(createMessage(MESSAGE_TYPES.INTENT_PARSED, { transcript: text, ...result }))
-      .catch(() => {
-        // Safe to ignore if side panel listener is not yet open
-      });
+    // Retry sending INTENT_PARSED up to 3 times with short delays.
+    // On the very first command the sidepanel listener may not yet be
+    // registered (Vite module execution is async), so we give it a chance
+    // to settle before giving up.
+    const msg = createMessage(MESSAGE_TYPES.INTENT_PARSED, { transcript: text, ...result });
+    let sent = false;
+    for (let attempt = 0; attempt < 3 && !sent; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 150));
+      try {
+        await chrome.runtime.sendMessage(msg);
+        sent = true;
+      } catch (_) {
+        // Listener not ready yet — retry
+      }
+    }
 
     await dispatchIntent(result, text);
   }
