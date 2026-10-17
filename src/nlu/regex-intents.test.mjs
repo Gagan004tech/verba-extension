@@ -128,6 +128,21 @@ const cases = [
   { in: "go to the email field", want: { intent: "FOCUS_FIELD", field: "email" } },
   { in: "go to the contact page", want: { intent: "NAVIGATE", destination: "the contact page" } }, // must not regress
 
+  // --- Month 2 Week 2: CONFIRM / CANCEL for confirmation gate -------------
+  { in: "yes", want: { intent: "CONFIRM" } },
+  { in: "confirm", want: { intent: "CONFIRM" } },
+  { in: "proceed", want: { intent: "CONFIRM" } },
+  { in: "sure", want: { intent: "CONFIRM" } },
+  { in: "yep", want: { intent: "CONFIRM" } },
+  { in: "ok", want: { intent: "CONFIRM" } },
+  { in: "go ahead", want: { intent: "CONFIRM" } },
+  { in: "no", want: { intent: "CANCEL" } },
+  { in: "cancel", want: { intent: "CANCEL" } },
+  { in: "stop", want: { intent: "CANCEL" } },
+  { in: "abort", want: { intent: "CANCEL" } },
+  { in: "never mind", want: { intent: "CANCEL" } },
+  { in: "don't", want: { intent: "CANCEL" } },
+
   // --- Should NOT match anything here -> correctly falls to zero-shot ----
   { in: "what's the weather like", want: null },
   { in: "can you read this page to me", want: { intent: "READ_PAGE" } }, // filler-stripped -> now DOES match

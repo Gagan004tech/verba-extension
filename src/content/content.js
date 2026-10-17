@@ -6,7 +6,12 @@
 (function () {
   'use strict';
 
-  const MESSAGE_TYPES = { PING: 'PING', SCAN_FIELDS: 'SCAN_FIELDS', FILL_FIELD: 'FILL_FIELD' };
+  const MESSAGE_TYPES = {
+    PING: 'PING',
+    SCAN_FIELDS: 'SCAN_FIELDS',
+    FILL_FIELD: 'FILL_FIELD',
+    EXECUTE_ACTION: 'EXECUTE_ACTION',
+  };
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || typeof message.type !== 'string') return false;
@@ -23,6 +28,8 @@
         return false;
       case MESSAGE_TYPES.FILL_FIELD:
         sendResponse(fillField(message.payload)); return false;
+      case MESSAGE_TYPES.EXECUTE_ACTION:
+        sendResponse(executeAction(message.payload)); return false;
       default: return false;
     }
   });
@@ -430,6 +437,67 @@
     }
     if (payload.highlight !== false) highlight(el);
     return { ok: true, selector: payload.selector, previous, value: el.value };
+  }
+
+  function executeAction(payload) {
+    if (!payload || !payload.action) return { ok: false, error: 'missing action' };
+    const act = String(payload.action).toUpperCase();
+
+    if (act === 'SUBMIT') {
+      const submitBtn = document.querySelector('button[type="submit"], input[type="submit"]') ||
+        Array.from(document.querySelectorAll('button')).find((b) => /submit|confirm|continue|send/i.test(b.textContent));
+      if (submitBtn) {
+        submitBtn.click();
+        return { ok: true, action: 'SUBMIT', target: 'button' };
+      }
+      const form = document.querySelector('form');
+      if (form) {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.submit();
+        return { ok: true, action: 'SUBMIT', target: 'form' };
+      }
+      return { ok: false, error: 'no form or submit button found' };
+    }
+
+    if (act === 'CLICK') {
+      const target = String(payload.target || '').trim().toLowerCase();
+      if (!target) return { ok: false, error: 'missing click target' };
+
+      try {
+        const el = document.querySelector(payload.target);
+        if (el) { el.click(); return { ok: true, action: 'CLICK', selector: payload.target }; }
+      } catch (e) { /* not a valid selector, fallback to text matching */ }
+
+      const clickables = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], label'));
+      const found = clickables.find((el) => cleanText(el.textContent).toLowerCase() === target) ||
+        clickables.find((el) => cleanText(el.textContent).toLowerCase().includes(target)) ||
+        clickables.find((el) => (el.value && String(el.value).toLowerCase() === target));
+
+      if (found) {
+        found.click();
+        return { ok: true, action: 'CLICK', target };
+      }
+      return { ok: false, error: `clickable element "${target}" not found` };
+    }
+
+    if (act === 'SCROLL_UP') {
+      window.scrollBy({ top: -window.innerHeight * 0.7, behavior: 'smooth' });
+      return { ok: true, action: 'SCROLL_UP' };
+    }
+    if (act === 'SCROLL_DOWN') {
+      window.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' });
+      return { ok: true, action: 'SCROLL_DOWN' };
+    }
+    if (act === 'SCROLL_TOP') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return { ok: true, action: 'SCROLL_TOP' };
+    }
+    if (act === 'SCROLL_BOTTOM') {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      return { ok: true, action: 'SCROLL_BOTTOM' };
+    }
+
+    return { ok: false, error: `unhandled action ${act}` };
   }
 
   // ---------------------------------------------------------------------------

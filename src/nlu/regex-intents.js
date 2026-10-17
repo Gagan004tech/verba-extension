@@ -310,11 +310,29 @@ export const REGEX_INTENTS = [
     slots: (match) => ({ destination: match[1].trim() }),
   },
 
+  // ---------------------------------------------------- CONFIRM / CANCEL
+  // Month 2 Week 2: "yes/no" intents for the confirmation gate.
+  // Must match bare affirmations and rejections deterministically before
+  // fallthrough, while allowing prefixed commands like "click cancel" to
+  // still reach CLICK.
+  {
+    intent: "CONFIRM",
+    // "yes" | "yep" | "yeah" | "sure" | "confirm" | "proceed" | "correct" | "ok" | "go ahead" | "do it"
+    pattern: /^(?:yes|yep|yeah|sure|confirm|proceed|correct|ok|okay|affirmative|go\s+ahead|do\s+it|accept)$/i,
+    slots: () => ({}),
+  },
+  {
+    intent: "CANCEL",
+    // "no" | "nope" | "nah" | "cancel" | "stop" | "abort" | "don't" | "deny" | "reject" | "never mind"
+    pattern: /^(?:no|nope|nah|cancel|stop|abort|don't|dont|deny|reject|negative|never\s+mind|dismiss)$/i,
+    slots: () => ({}),
+  },
+
   // --------------------------------------------------------------- SUBMIT
   {
     intent: "SUBMIT",
-    // "submit" | "submit the form" | "send it" | "confirm" | "finish" | "complete the form"
-    pattern: /^(?:submit|send|confirm|finish|complete)(?:\s+(?:the\s+)?(?:form|it))?$/i,
+    // "submit" | "submit the form" | "send it" | "finish" | "complete the form" | "confirm the form"
+    pattern: /^(?:submit|send|finish|complete)(?:\s+(?:the\s+)?(?:form|it))?$|^confirm\s+(?:the\s+)?form$/i,
     slots: () => ({}),
   },
 
