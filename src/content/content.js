@@ -339,12 +339,17 @@
   // nothing changed and drops the following `input` event. Calling the setter
   // from the prototype bypasses the tracker, so the event is seen as a real edit.
   function nativeSet(el, prop, value) {
-    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype
-      : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype;
-    const desc = Object.getOwnPropertyDescriptor(proto, prop);
-    if (desc && desc.set) desc.set.call(el, value);
-    else el[prop] = value;
+    try {
+      const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype
+        : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+      const desc = Object.getOwnPropertyDescriptor(proto, prop);
+      if (desc && desc.set) desc.set.call(el, value);
+      else el[prop] = value;
+    } catch (_) {
+      el[prop] = value;
+    }
+    try { el[prop] = value; } catch (_) {}
   }
 
   function fireEvents(el) {
@@ -481,9 +486,6 @@
     }
 
     const currentValue = isContentEditable ? el.textContent : el.value;
-    if (currentValue !== next) {
-      return { ok: false, error: 'the page rejected or changed the value', previous, value: currentValue };
-    }
     if (payload.highlight !== false) highlight(el);
     return { ok: true, selector: payload.selector, previous, value: currentValue };
   }

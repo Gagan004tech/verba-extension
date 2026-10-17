@@ -247,12 +247,16 @@ export async function rankFieldsFused(spokenPhrase, fields, options = {}) {
   const semanticScoreMap = new Map();
 
   try {
-    const semResults = await rankBySemanticSimilarity(spokenPhrase, candList);
+    const semPromise = rankBySemanticSimilarity(spokenPhrase, candList);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Semantic embedding timeout")), 1500)
+    );
+    const semResults = await Promise.race([semPromise, timeoutPromise]);
     for (const res of semResults) {
       semanticScoreMap.set(res.label, res.score);
     }
   } catch (err) {
-    console.warn("[VERBA][Matcher] Semantic embeddings unavailable, falling back to lexical + synonym:", err);
+    console.warn("[VERBA][Matcher] Semantic embeddings unavailable or timed out, falling back to lexical + synonym:", err?.message || err);
   }
 
   const results = fields.map((item) => {

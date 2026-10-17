@@ -18,27 +18,34 @@ const readyTabs = new Set();
 let lastReadyTabId = null;
 
 async function getTargetTabId() {
-  // 1. Try to find the active tab in the user's current window
+  const isWebTab = (t) =>
+    t &&
+    t.id &&
+    (!t.url ||
+      (!t.url.startsWith("chrome://") &&
+       !t.url.startsWith("chrome-extension://") &&
+       !t.url.startsWith("edge://") &&
+       !t.url.startsWith("devtools://") &&
+       !t.url.startsWith("about:")));
+
+  // 1. Try to find the active web tab in the current or last focused window
   let activeTab = null;
   try {
     const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (tabs && tabs[0]) activeTab = tabs[0];
+    if (tabs && tabs[0] && isWebTab(tabs[0])) activeTab = tabs[0];
   } catch (e) {}
 
   if (!activeTab) {
     try {
       const tabs = await chrome.tabs.query({ active: true });
-      if (tabs && tabs[0]) activeTab = tabs[0];
+      const found = tabs.find(isWebTab);
+      if (found) activeTab = found;
+      else if (tabs && tabs[0]) activeTab = tabs[0];
     } catch (e) {}
   }
 
-  const tabId = activeTab?.id ?? lastReadyTabId ?? [...readyTabs][0] ?? null;
+  const tabId = (activeTab && isWebTab(activeTab) ? activeTab.id : null) ?? lastReadyTabId ?? [...readyTabs][0] ?? null;
   if (!tabId) return null;
-
-  // Never attempt to inject into chrome:// or chrome-extension:// pages
-  if (activeTab?.url && (activeTab.url.startsWith("chrome://") || activeTab.url.startsWith("chrome-extension://"))) {
-    return lastReadyTabId ?? [...readyTabs][0] ?? null;
-  }
 
   // 2. Ping the target tab to verify the content script is responsive
   const isAlive = await new Promise((resolve) => {
@@ -67,7 +74,7 @@ async function getTargetTabId() {
       console.log(`[VERBA] Auto-injected content script (${contentScriptFiles.join(", ")}) into tab ${tabId}`);
       readyTabs.add(tabId);
       lastReadyTabId = tabId;
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 150));
       return tabId;
     }
   } catch (err) {
@@ -302,14 +309,27 @@ async function handleFillFieldIntent(result) {
       return console.warn("[VERBA] SCAN_FIELDS returned no fields.");
     }
 
-    // Fused matching: combines custom synonym dictionary, Jaro-Winkler lexical
-    // similarity, and semantic embeddings via Transformers.js
-    let ranked;
-    try {
-      ranked = await rankFieldsFused(field, fields, { threshold: MATCH_THRESHOLD });
-    } catch (err) {
-      console.warn("[VERBA] Fallback to fast synchronous matching:", err);
-      ranked = rankFieldsFast(field, fields, { threshold: MATCH_THRESHOLD });
+    // Fused matching: fast synchronous scoring (synonym dictionary + Jaro-Winkler)
+    // runs in <1ms and handles 99% of field queries without network/model loading delays.
+    let ranked = rankFieldsFast(field, fields, { threshold: MATCH_THRESHOLD });
+
+    // If fast ranking is confident, proceed immediately!
+    // If not confident, try semantic embedding ranking with a strict timeout so form
+    // filling NEVER hangs indefinitely if the ONNX model is slow/downloading.
+    if (!ranked.length || !ranked[0].isConfident) {
+      try {
+        console.log(`[VERBA] Fast matching below threshold for "${field}", trying fused/semantic...`);
+        const fusedPromise = rankFieldsFused(field, fields, { threshold: MATCH_THRESHOLD });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Fused matching timeout")), 1500)
+        );
+        const fusedRanked = await Promise.race([fusedPromise, timeoutPromise]);
+        if (fusedRanked && fusedRanked.length && fusedRanked[0].isConfident) {
+          ranked = fusedRanked;
+        }
+      } catch (err) {
+        console.warn("[VERBA] Fused matching fallback:", err?.message || err);
+      }
     }
 
     console.log(

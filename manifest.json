@@ -10,6 +10,9 @@
     "scripting",
     "tabs"
   ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "action": {
     "default_title": "Open VERBA Assistant"
   },
