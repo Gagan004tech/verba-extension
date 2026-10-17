@@ -41,9 +41,7 @@ function promptMicAuthorization() {
   enableManualInputFallback();
 }
 
-// Listen for broker events (e.g., spoken readback requested by P3)
-chrome.runtime.onMessage.addListener((message) => {
-  // Listen for broker events (e.g., spoken readback requested by P3)
+// Listen for broker events (e.g., spoken readback, parsed intent)
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPEAK_CONFIRMATION && message.payload?.text) {
     speakReadback(message.payload.text);
@@ -56,7 +54,6 @@ chrome.runtime.onMessage.addListener((message) => {
     intentJsonDiv.textContent = JSON.stringify(message.payload, null, 2);
     console.log("[VERBA] INTENT_PARSED:", message.payload);
   }
-});
 });
 
 if (!SpeechRecognition) {

@@ -42,6 +42,9 @@ P2 is responsible for translating human voice into deterministic browser actions
 | **"enter first name John"** | Real web forms | **RESOLVED** | Initially failed because `"as"` was required. Added rule allowing fill verbs directly followed by known field phrases without `"as"`. |
 | **"City Thiruvananthapuram"** | `03-messy-labels.html` | **RESOLVED** | Initially failed because label had placeholder `"Enter your city"`. Added prefix stripping (`"Enter your"` $\rightarrow$ `"city"`) so it now matches with score 1.0. |
 | **"on the bar labelled ask Google or type URL enter artificial intelligence"** | Google search / URL bar | **RESOLVED** | Added location-first pattern `on the bar labelled <field> enter <val>` and expanded search synonyms. |
+| **"search for artificial intelligence" / "search AI"** | Google & modern web search bars | **RESOLVED** | Identified and fixed 4 search-bar detection hurdles: (1) Added direct `search (for)? <query>` regex, (2) Enabled scanning `[role="searchbox"]`, `[role="combobox"]`, `[contenteditable]`, and `type="search"`, (3) Included `name="q"` and `role="searchbox"` as search candidates, (4) Dispatched Enter keydown/keypress/keyup after value injection for immediate search triggering. |
+| **First spoken command JSON not showing in side panel** | Side panel UI | **RESOLVED** | Removed duplicate nested `chrome.runtime.onMessage.addListener` in `sidepanel/index.js` which swallowed the first event. |
+| **"No content script has registered yet" on first command** | Tabs after extension reload | **RESOLVED** | Made `getTargetTabId()` async with activeTab query, live PING check, and automatic scripting injection fallback. |
 
 ---
 
@@ -67,13 +70,18 @@ P2 is responsible for translating human voice into deterministic browser actions
 * **Problem:** Zero-shot model classified `"enter first name John"` as `FILL_FIELD` with 0.4928 confidence, but the threshold was hardcoded to 0.55, dropping a valid prediction into `UNKNOWN`.
 * **Fix:** Tuned `CONFIDENCE_THRESHOLD` to 0.25. In an NLI pool of 30+ classes, a score of 0.49 is over 15x higher than random distribution ($1/30 \approx 0.033$) and represents high confidence.
 
-### Issue 6: Location-First Phrasing & Search
-* **Problem:** User spoke: *"on the bar labelled ask Google or type URL enter artificial intelligence"*.
-* **Fix:** Added greedy location-first pattern:
-  ```regex
-  ^(?:in|on|at)\s+(?:the\s+)?(?:bar|field|box|input)?\s*(?:labelled|named|called)?\s+(.+)\s+(?:enter|type|fill|put|write|set)\s+(.+)$
-  ```
-  Expanded `search` in `synonym-dictionary.js` to include `"ask google"`, `"ask google or type url"`, `"search bar"`, `"search box"`.
+### Issue 6: Location-First Phrasing & Search Bar Detection
+* **Problem:** Searching on Google/real websites failed when saying *"search for ..."*, *"look up ..."*, or *"on the bar labelled ask Google or type URL enter ..."*.
+* **Root Causes & Fixes:**
+  1. **NLU Phrasing:** Added direct search regex pattern `^(?:search\s+(?:for\s+)?|look\s+up\s+)(.+?)$` mapping to `{ field: "search", value: ... }` with negative lookahead protecting `"on the page"` commands.
+  2. **Short Element Names:** Google's search input is `<textarea name="q">` or `<input name="q">`. The generator had a rule rejecting names shorter than 3 letters as "generated". We explicitly added an exception for `name="q"` mapping to `"search"`.
+  3. **Role & Type Detection:** Added extraction of `role="searchbox"`, `role="combobox"`, and `type="search"` as high-weight search candidates.
+  4. **Active Submission:** In search contexts, `fillField` automatically focuses the input and dispatches `Enter` keyboard events (`keydown`, `keypress`, `keyup`) so search queries trigger immediately.
+  5. **Rich Search Bars:** Expanded scanner selector to include `[role="searchbox"]` and `[contenteditable]` elements for modern dynamic sites.
+
+### Issue 7: Side Panel JSON Rendering & Content Script Readiness
+* **Problem:** JSON output only appeared starting from the second spoken command, and the service worker threw *"No content script has registered yet"*.
+* **Fix:** Removed duplicate nested message listener in [src/sidepanel/index.js](file:///c:/Users/dell/Documents/GitHub/verba-extension/src/sidepanel/index.js), and made `getTargetTabId()` asynchronously query `chrome.tabs`, ping the content script, and dynamically auto-inject if needed.
 
 ---
 

@@ -73,9 +73,14 @@ export const SYNONYM_DICTIONARY = {
     "search box",
     "search input",
     "google search",
+    "search google",
+    "search the web",
+    "search web",
     "ask google",
     "ask google or type url",
+    "search google or type a url",
     "query",
+    "q",
   ],
 };
 
