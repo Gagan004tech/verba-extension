@@ -91,7 +91,7 @@ const messyFormFields = [
   { id: "x_mob", label: "Mobile", candidates: ["mobile", "mobile number"] },
   { id: "aad", label: "Aadhaar number", candidates: ["aadhaar number", "aadhaar"] },
   { id: "srch", label: "Search", candidates: ["search"] },
-  { id: "cty", label: "Enter your city", candidates: ["enter your city", "city"] },
+  { id: "cty", label: "Enter your city", candidates: ["enter your city"] },
   { id: "zip", label: "Pincode", candidates: ["pincode", "zip code", "zip"] },
   { id: "gn", label: "given name", candidates: ["given name"] },
   { id: "g", label: "Gender", candidates: ["gender"] },

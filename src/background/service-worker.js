@@ -11,16 +11,77 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("[VERBA] Extension installed & service worker active.");
 });
 
-// --- Content-script tab tracking (P3) ---------------------------------
-// Content scripts announce themselves on load; we remember which tab(s)
-// are ready so SCAN_FIELDS / FILL_FIELD have somewhere to go.
+// --- Content-script tab tracking & auto-injection ---------------------
+// Remembers which tab(s) are ready, queries activeTab dynamically, and
+// auto-injects content.js if the extension was reloaded while a tab stayed open.
 const readyTabs = new Set();
 let lastReadyTabId = null;
 
-function getTargetTabId() {
-  if (lastReadyTabId) return lastReadyTabId;
-  const [anyReady] = [...readyTabs];
-  return anyReady ?? null;
+async function getTargetTabId() {
+  const isWebTab = (t) =>
+    t &&
+    t.id &&
+    (!t.url ||
+      (!t.url.startsWith("chrome://") &&
+       !t.url.startsWith("chrome-extension://") &&
+       !t.url.startsWith("edge://") &&
+       !t.url.startsWith("devtools://") &&
+       !t.url.startsWith("about:")));
+
+  // 1. Try to find the active web tab in the current or last focused window
+  let activeTab = null;
+  try {
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tabs && tabs[0] && isWebTab(tabs[0])) activeTab = tabs[0];
+  } catch (e) {}
+
+  if (!activeTab) {
+    try {
+      const tabs = await chrome.tabs.query({ active: true });
+      const found = tabs.find(isWebTab);
+      if (found) activeTab = found;
+      else if (tabs && tabs[0]) activeTab = tabs[0];
+    } catch (e) {}
+  }
+
+  const tabId = (activeTab && isWebTab(activeTab) ? activeTab.id : null) ?? lastReadyTabId ?? [...readyTabs][0] ?? null;
+  if (!tabId) return null;
+
+  // 2. Ping the target tab to verify the content script is responsive
+  const isAlive = await new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.PING }, (res) => {
+      if (chrome.runtime.lastError || !res?.ok) resolve(false);
+      else resolve(true);
+    });
+  });
+
+  if (isAlive) {
+    readyTabs.add(tabId);
+    lastReadyTabId = tabId;
+    return tabId;
+  }
+
+  // 3. Content script was not responsive (e.g. extension was reloaded while tab stayed open)
+  // Auto-inject content script dynamically using scripting API and the manifest's resolved path!
+  try {
+    if (chrome.scripting?.executeScript) {
+      const manifest = chrome.runtime.getManifest();
+      const contentScriptFiles = manifest?.content_scripts?.[0]?.js || ["src/content/content.js"];
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: contentScriptFiles,
+      });
+      console.log(`[VERBA] Auto-injected content script (${contentScriptFiles.join(", ")}) into tab ${tabId}`);
+      readyTabs.add(tabId);
+      lastReadyTabId = tabId;
+      await new Promise((r) => setTimeout(r, 150));
+      return tabId;
+    }
+  } catch (err) {
+    console.warn(`[VERBA] Failed to auto-inject content script into tab ${tabId}:`, err?.message || err);
+  }
+
+  return tabId;
 }
 
 // --- Safety Confirmation Gate State (Month 2) --------------------------
@@ -80,11 +141,21 @@ async function handleTranscript(text) {
   console.log(`[VERBA][NLU] Parsed ${intentResults.length} intent(s):`, intentResults);
 
   for (const result of intentResults) {
-    chrome.runtime
-      .sendMessage(createMessage(MESSAGE_TYPES.INTENT_PARSED, { transcript: text, ...result }))
-      .catch(() => {
-        // Safe to ignore if side panel listener is not yet open
-      });
+    // Retry sending INTENT_PARSED up to 3 times with short delays.
+    // On the very first command the sidepanel listener may not yet be
+    // registered (Vite module execution is async), so we give it a chance
+    // to settle before giving up.
+    const msg = createMessage(MESSAGE_TYPES.INTENT_PARSED, { transcript: text, ...result });
+    let sent = false;
+    for (let attempt = 0; attempt < 3 && !sent; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 150));
+      try {
+        await chrome.runtime.sendMessage(msg);
+        sent = true;
+      } catch (_) {
+        // Listener not ready yet — retry
+      }
+    }
 
     await dispatchIntent(result, text);
   }
@@ -139,7 +210,7 @@ async function dispatchIntent(result, rawTranscript) {
 
   // 2. Intercept sensitive / final actions via Confirmation Gate
   if (intent === "SUBMIT") {
-    const tabId = getTargetTabId();
+    const tabId = await getTargetTabId();
     pendingConfirmation = { action: "SUBMIT", tabId, timestamp: Date.now() };
 
     chrome.runtime
@@ -164,25 +235,28 @@ async function dispatchIntent(result, rawTranscript) {
 
   // 4. In-page click
   if (intent === "CLICK") {
-    requestAction({ action: "CLICK", target: slots.target });
+    const tabId = await getTargetTabId();
+    requestAction({ action: "CLICK", target: slots.target }, tabId);
     return;
   }
 
   // 5. Scroll commands
   if (intent.startsWith("SCROLL_")) {
-    requestAction({ action: intent });
+    const tabId = await getTargetTabId();
+    requestAction({ action: intent }, tabId);
     return;
   }
 
   // 6. Form reset / clear
   if (intent === "RESET_FORM") {
-    requestAction({ action: "RESET_FORM" });
+    const tabId = await getTargetTabId();
+    requestAction({ action: "RESET_FORM" }, tabId);
     return;
   }
 
   if (intent === "CLEAR_FIELD") {
     // Clear targeted field
-    const tabId = getTargetTabId();
+    const tabId = await getTargetTabId();
     if (tabId && slots.field) {
       chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.SCAN_FIELDS }, async (scanResponse) => {
         const fields = scanResponse?.fields || [];
@@ -219,7 +293,7 @@ async function handleFillFieldIntent(result) {
     return;
   }
 
-  const tabId = getTargetTabId();
+  const tabId = await getTargetTabId();
   if (!tabId) {
     console.warn("[VERBA] No content script has registered yet - can't scan or fill.");
     return;
@@ -235,14 +309,27 @@ async function handleFillFieldIntent(result) {
       return console.warn("[VERBA] SCAN_FIELDS returned no fields.");
     }
 
-    // Fused matching: combines custom synonym dictionary, Jaro-Winkler lexical
-    // similarity, and semantic embeddings via Transformers.js
-    let ranked;
-    try {
-      ranked = await rankFieldsFused(field, fields, { threshold: MATCH_THRESHOLD });
-    } catch (err) {
-      console.warn("[VERBA] Fallback to fast synchronous matching:", err);
-      ranked = rankFieldsFast(field, fields, { threshold: MATCH_THRESHOLD });
+    // Fused matching: fast synchronous scoring (synonym dictionary + Jaro-Winkler)
+    // runs in <1ms and handles 99% of field queries without network/model loading delays.
+    let ranked = rankFieldsFast(field, fields, { threshold: MATCH_THRESHOLD });
+
+    // If fast ranking is confident, proceed immediately!
+    // If not confident, try semantic embedding ranking with a strict timeout so form
+    // filling NEVER hangs indefinitely if the ONNX model is slow/downloading.
+    if (!ranked.length || !ranked[0].isConfident) {
+      try {
+        console.log(`[VERBA] Fast matching below threshold for "${field}", trying fused/semantic...`);
+        const fusedPromise = rankFieldsFused(field, fields, { threshold: MATCH_THRESHOLD });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Fused matching timeout")), 1500)
+        );
+        const fusedRanked = await Promise.race([fusedPromise, timeoutPromise]);
+        if (fusedRanked && fusedRanked.length && fusedRanked[0].isConfident) {
+          ranked = fusedRanked;
+        }
+      } catch (err) {
+        console.warn("[VERBA] Fused matching fallback:", err?.message || err);
+      }
     }
 
     console.log(
@@ -277,18 +364,20 @@ async function handleFillFieldIntent(result) {
 // they're functions here rather than switch cases. Callable directly
 // from this service worker's own DevTools console for manual testing.
 
-function requestScan(tabId = getTargetTabId()) {
-  if (!tabId) return console.warn("[VERBA] No content script has registered yet.");
-  chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.SCAN_FIELDS }, (response) => {
+async function requestScan(tabId = null) {
+  const targetId = tabId || (await getTargetTabId());
+  if (!targetId) return console.warn("[VERBA] No content script or active tab available to scan.");
+  chrome.tabs.sendMessage(targetId, { type: MESSAGE_TYPES.SCAN_FIELDS }, (response) => {
     if (chrome.runtime.lastError) return console.warn("[VERBA] SCAN_FIELDS failed:", chrome.runtime.lastError.message);
     console.log("[VERBA] SCAN_FIELDS response:", response);
   });
 }
 
-function requestFill(selector, value, tabId = getTargetTabId()) {
-  if (!tabId) return console.warn("[VERBA] No content script has registered yet.");
+async function requestFill(selector, value, tabId = null) {
+  const targetId = tabId || (await getTargetTabId());
+  if (!targetId) return console.warn("[VERBA] No content script or active tab available to fill.");
   chrome.tabs.sendMessage(
-    tabId,
+    targetId,
     { type: MESSAGE_TYPES.FILL_FIELD, payload: { selector, value } },
     (response) => {
       if (chrome.runtime.lastError) return console.warn("[VERBA] FILL_FIELD failed:", chrome.runtime.lastError.message);
@@ -297,10 +386,11 @@ function requestFill(selector, value, tabId = getTargetTabId()) {
   );
 }
 
-function requestAction(payload, tabId = getTargetTabId()) {
-  if (!tabId) return console.warn("[VERBA] No content script has registered yet.");
+async function requestAction(payload, tabId = null) {
+  const targetId = tabId || (await getTargetTabId());
+  if (!targetId) return console.warn("[VERBA] No content script or active tab available to execute action.");
   chrome.tabs.sendMessage(
-    tabId,
+    targetId,
     { type: MESSAGE_TYPES.EXECUTE_ACTION, payload },
     (response) => {
       if (chrome.runtime.lastError) return console.warn("[VERBA] EXECUTE_ACTION failed:", chrome.runtime.lastError.message);
@@ -317,9 +407,10 @@ self.requestAction = requestAction;
 // P3 (W3): dump each field's label candidates as JSON to hand to P2.
 // Usage in this DevTools console: requestLabelDump(), then
 // copy(JSON.stringify(lastDump, null, 2))
-function requestLabelDump(tabId = getTargetTabId()) {
-  if (!tabId) return console.warn("[VERBA] No content script has registered yet.");
-  chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.SCAN_FIELDS }, (r) => {
+async function requestLabelDump(tabId = null) {
+  const targetId = tabId || (await getTargetTabId());
+  if (!targetId) return console.warn("[VERBA] No content script or active tab available to dump.");
+  chrome.tabs.sendMessage(targetId, { type: MESSAGE_TYPES.SCAN_FIELDS }, (r) => {
     if (chrome.runtime.lastError || !r?.ok) {
       return console.warn("[VERBA] dump failed:", chrome.runtime.lastError?.message || r?.error);
     }

@@ -226,9 +226,33 @@
     const near = nearbyText(el);
     if (near) add(near.text, 'sibling', Math.max(0.2, WEIGHTS.sibling - 0.1 * near.depth));
 
+    // role attribute (e.g. role="searchbox", role="combobox")
+    const role = (el.getAttribute('role') || '').trim().toLowerCase();
+    if (role) {
+      add(humanize(role), 'role', 0.85);
+      if (role === 'searchbox') add('search', 'role', 0.85);
+    }
+
+    // type="search" or type="text"
+    const elType = (el.getAttribute('type') || '').trim().toLowerCase();
+    if (elType === 'search') {
+      add('search', 'type', 0.8);
+      add('search bar', 'type', 0.8);
+    }
+
+    // aria-keyshortcuts or accesskey
+    const keyshortcuts = (el.getAttribute('aria-keyshortcuts') || '').trim();
+    if (keyshortcuts && (keyshortcuts.includes('/') || /search/i.test(keyshortcuts))) {
+      add('search', 'keyshortcuts', 0.7);
+    }
+
     // name / id (humanized) as last-resort hints
     const name = el.getAttribute('name');
-    if (name && !looksGenerated(name)) add(humanize(name), 'name', WEIGHTS.name);
+    if (name && (!looksGenerated(name) || name.toLowerCase() === 'q')) {
+      const humName = name.toLowerCase() === 'q' ? 'search' : humanize(name);
+      add(humName, 'name', WEIGHTS.name);
+      if (name.toLowerCase() === 'q') add('q', 'name', WEIGHTS.name);
+    }
     if (el.id && !looksGenerated(el.id)) add(humanize(el.id), 'id', WEIGHTS.id);
 
     // Dedupe by lowercase text, keep the highest-weighted source.
@@ -262,15 +286,15 @@
   }
 
   function scanFields() {
-    const candidates = document.querySelectorAll('input, select, textarea');
+    const candidates = document.querySelectorAll('input, select, textarea, [role="searchbox"], [role="combobox"][contenteditable="true"], [contenteditable="true"]');
     const fields = [];
 
     candidates.forEach((el) => {
       const tag = el.tagName.toLowerCase();
-      const type = tag === 'input' ? (el.getAttribute('type') || 'text').toLowerCase() : tag;
+      const type = tag === 'input' ? (el.getAttribute('type') || 'text').toLowerCase() : (el.getAttribute('role') || tag);
 
       if (tag === 'input' && SKIP_INPUT_TYPES.has(type)) return;
-      if (el.disabled) return;
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') return;
 
       const verbaId = ensureVerbaId(el);
       const lab = generateLabels(el);
@@ -315,12 +339,17 @@
   // nothing changed and drops the following `input` event. Calling the setter
   // from the prototype bypasses the tracker, so the event is seen as a real edit.
   function nativeSet(el, prop, value) {
-    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype
-      : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype;
-    const desc = Object.getOwnPropertyDescriptor(proto, prop);
-    if (desc && desc.set) desc.set.call(el, value);
-    else el[prop] = value;
+    try {
+      const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype
+        : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+      const desc = Object.getOwnPropertyDescriptor(proto, prop);
+      if (desc && desc.set) desc.set.call(el, value);
+      else el[prop] = value;
+    } catch (_) {
+      el[prop] = value;
+    }
+    try { el[prop] = value; } catch (_) {}
   }
 
   function fireEvents(el) {
@@ -386,14 +415,15 @@
     catch (e) { return { ok: false, error: 'invalid selector' }; }
     if (!el) return { ok: false, error: 'element not found' };
 
-    const isField = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+    const isContentEditable = el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+    const isField = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || isContentEditable;
     if (!isField) return { ok: false, error: 'not a fillable element' };
     if (el.disabled) return { ok: false, error: 'field is disabled' };
     if (el.readOnly) return { ok: false, error: 'field is read-only' };
 
-    const type = el instanceof HTMLInputElement ? (el.getAttribute('type') || 'text').toLowerCase() : el.tagName.toLowerCase();
+    const type = isContentEditable ? 'contenteditable' : (el instanceof HTMLInputElement ? (el.getAttribute('type') || 'text').toLowerCase() : el.tagName.toLowerCase());
     const raw = String(payload.value);
-    const previous = (type === 'checkbox' || type === 'radio') ? el.checked : el.value;
+    const previous = (type === 'checkbox' || type === 'radio') ? el.checked : (isContentEditable ? el.textContent : el.value);
 
     if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', behavior: 'smooth' });
 
@@ -429,14 +459,35 @@
       next = raw.replace(/[,\s]/g, '');
     }
 
-    nativeSet(el, 'value', next);
+    if (typeof el.focus === 'function') el.focus();
+
+    if (isContentEditable) {
+      el.textContent = next;
+    } else {
+      nativeSet(el, 'value', next);
+    }
     fireEvents(el);
 
-    if (el.value !== next) {
-      return { ok: false, error: 'the page rejected or changed the value', previous, value: el.value };
+    // If filling a search bar or single-line input in a search context, dispatch Enter key
+    const isSearchContext = type === 'search' ||
+      (el.getAttribute('role') || '').toLowerCase() === 'searchbox' ||
+      (el.getAttribute('name') || '').toLowerCase() === 'q' ||
+      (el.getAttribute('aria-label') || '').toLowerCase().includes('search');
+
+    if (isSearchContext) {
+      try {
+        const enterInit = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+        el.dispatchEvent(new KeyboardEvent('keydown', enterInit));
+        el.dispatchEvent(new KeyboardEvent('keypress', enterInit));
+        el.dispatchEvent(new KeyboardEvent('keyup', enterInit));
+      } catch (e) {
+        // Safe to ignore if synthetic keyboard events are restricted
+      }
     }
+
+    const currentValue = isContentEditable ? el.textContent : el.value;
     if (payload.highlight !== false) highlight(el);
-    return { ok: true, selector: payload.selector, previous, value: el.value };
+    return { ok: true, selector: payload.selector, previous, value: currentValue };
   }
 
   function executeAction(payload) {

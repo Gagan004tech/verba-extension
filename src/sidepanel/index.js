@@ -41,9 +41,7 @@ function promptMicAuthorization() {
   enableManualInputFallback();
 }
 
-// Listen for broker events (e.g., spoken readback requested by P3)
-chrome.runtime.onMessage.addListener((message) => {
-  // Listen for broker events (e.g., spoken readback requested by P3)
+// Listen for broker events (e.g., spoken readback, parsed intent)
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPEAK_CONFIRMATION && message.payload?.text) {
     speakReadback(message.payload.text);
@@ -56,7 +54,6 @@ chrome.runtime.onMessage.addListener((message) => {
     intentJsonDiv.textContent = JSON.stringify(message.payload, null, 2);
     console.log("[VERBA] INTENT_PARSED:", message.payload);
   }
-});
 });
 
 if (!SpeechRecognition) {
@@ -76,6 +73,10 @@ if (!SpeechRecognition) {
     const current = event.resultIndex;
     const text = event.results[current][0].transcript.trim();
     transcriptDiv.textContent = `Heard: "${text}"`;
+
+    // Show immediate placeholder so the first command always has visible feedback
+    // while the NLU model processes (the INTENT_PARSED message will overwrite this)
+    intentJsonDiv.textContent = "Processing...";
 
     // Hand-off 3: Send live transcript stream to the message broker
     chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TRANSCRIPT_STREAM, { text }));
@@ -169,6 +170,8 @@ function enableManualInputFallback() {
       if (e.key === "Enter" && fallbackInput.value.trim() !== "") {
         const text = fallbackInput.value.trim();
         transcriptDiv.textContent = `Typed: "${text}"`;
+        // Show immediate placeholder while NLU processes
+        intentJsonDiv.textContent = "Processing...";
         chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TRANSCRIPT_STREAM, { text }));
         fallbackInput.value = "";
       }

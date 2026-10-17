@@ -76,7 +76,7 @@ export function normalizeTranscript(transcript) {
 // name field to Alex" (matches the SET_TO pattern below, verb "set" isn't
 // swallowed into the field). We chose verb-recovery over literal-field
 // support because mis-hearing "fill" is the far more common case.
-const FILL_VERB = "(?:fill|full|feel|fil|enter|type)";
+const FILL_VERB = "(?:fill|full|feel|fil|enter|type|and\\s+their|and\\s+the)";
 
 // Longest-first so alternation (which is first-match, not longest-match)
 // tries "phone number" before the shorter "phone" - otherwise "phone" would
@@ -93,9 +93,29 @@ export const REGEX_INTENTS = [
   // ---------------------------------------------------------------- FILL
   {
     intent: "FILL_FIELD",
-    // "fill name as Alex" | "full phone number with 9876543210" (mis-heard "fill")
-    pattern: new RegExp(`^${FILL_VERB}\\s+(?:in\\s+)?(.+?)\\s+(?:as|with)\\s+(.+)$`, "i"),
+    // "fill name as Alex" | "full phone number with 9876543210" | "enter pan at ABCDE 1 2 3 4" | "set email to test@test.com"
+    pattern: new RegExp(`^${FILL_VERB}\\s+(?:in\\s+|into\\s+)?(?:the\\s+)?(.+?)\\s+(?:as|with|at|to|is|=|\:)\\s+(.+)$`, "i"),
     slots: (match) => ({ field: match[1].trim(), rawValue: match[2].trim() }),
+  },
+  {
+    intent: "FILL_FIELD",
+    // "enter first name John" | "fill phone 9876543210" | "type email alex@test.com" | "enter pan ABCDE 1234"
+    // When a fill verb is directly followed by a known field phrase, match the field and rest is value (no "as/with" required)
+    pattern: new RegExp(`^${FILL_VERB}\\s+(?:in\\s+)?(?:the\\s+|my\\s+)?(${KNOWN_FIELD_PHRASES.join("|")})\\s+(.+)$`, "i"),
+    slots: (match) => ({ field: match[1].trim(), rawValue: match[2].trim() }),
+  },
+  {
+    intent: "FILL_FIELD",
+    // "on the bar labelled ask Google or type URL enter artificial intelligence" | "in the search bar enter AI"
+    pattern: /^(?:in|on|at)\s+(?:the\s+)?(?:bar|field|box|input)?\s*(?:labelled|named|called)?\s+(.+)\s+(?:enter|type|fill|put|write|set)\s+(.+)$/i,
+    slots: (match) => ({ field: match[1].trim(), rawValue: match[2].trim() }),
+  },
+  {
+    intent: "FILL_FIELD",
+    // "search for artificial intelligence" | "search for AI on google" | "search quantum computing" | "look up climate change"
+    // Negative lookahead (?!(?:on|in)\s+(?:this\s+|the\s+)?page) ensures "search for X on the page" falls through to FIND_ON_PAGE
+    pattern: /^(?:search\s+(?:for\s+)?|look\s+up\s+)(?!(?:.+?)\s+on\s+(?:this\s+|the\s+)?page$)(.+?)(?:\s+(?:on|in)\s+(?:google|the\s+web|the\s+internet))?$/i,
+    slots: (match) => ({ field: "search", rawValue: match[1].trim() }),
   },
   {
     intent: "FILL_FIELD",

@@ -40,6 +40,13 @@ const cases = [
   { in: "feel name as Alex", want: { intent: "FILL_FIELD", field: "name", value: "Alex" } },
   { in: "fil name as Alex", want: { intent: "FILL_FIELD", field: "name", value: "Alex" } },
 
+  // --- User reported live test cases -------------------------------------
+  { in: "enter Pan at ABCDE 1 2 3 4", want: { intent: "FILL_FIELD", field: "pan", value: "ABCDE1234" } },
+  { in: "enter first name John", want: { intent: "FILL_FIELD", field: "first name", value: "John" } },
+  { in: "Pan ABCD 12345 f", want: { intent: "FILL_FIELD", field: "pan", value: "ABCD12345F" } },
+  { in: "City Thiruvananthapuram", want: { intent: "FILL_FIELD", field: "city", value: "Thiruvananthapuram" } },
+  { in: "on the bar labelled ask Google or type URL enter artificial intelligence", want: { intent: "FILL_FIELD", field: "ask google or type url", value: "artificial intelligence" } },
+
   // --- Existing baseline, must not regress --------------------------------
   { in: "enter phone number with 9876543210", want: { intent: "FILL_FIELD", field: "phone number", value: "9876543210" } },
   { in: "fill pan from my profile", want: { intent: "FILL_FIELD", field: "pan", profileKey: "pan" } },

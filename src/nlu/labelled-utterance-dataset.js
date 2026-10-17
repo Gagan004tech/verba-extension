@@ -13,6 +13,10 @@ export const LABELLED_UTTERANCES = [
   { id: "fs-3", utterance: "set email to user@test.com", expectedIntent: "FILL_FIELD", expectedSlots: { field: "email", value: "user@test.com" }, category: "fill_standard" },
   { id: "fs-4", utterance: "type address as 123 Main Street", expectedIntent: "FILL_FIELD", expectedSlots: { field: "address", value: "123 Main Street" }, category: "fill_standard" },
   { id: "fs-5", utterance: "fill in city as Seattle", expectedIntent: "FILL_FIELD", expectedSlots: { field: "city", value: "Seattle" }, category: "fill_standard" },
+  { id: "fs-6", utterance: "enter Pan at ABCDE 1 2 3 4", expectedIntent: "FILL_FIELD", expectedSlots: { field: "pan", value: "ABCDE1234" }, category: "fill_standard" },
+  { id: "fs-7", utterance: "enter first name John", expectedIntent: "FILL_FIELD", expectedSlots: { field: "first name", value: "John" }, category: "fill_standard" },
+  { id: "fs-8", utterance: "City Thiruvananthapuram", expectedIntent: "FILL_FIELD", expectedSlots: { field: "city", value: "Thiruvananthapuram" }, category: "fill_terse" },
+  { id: "fs-9", utterance: "on the bar labelled ask Google or type URL enter artificial intelligence", expectedIntent: "FILL_FIELD", expectedSlots: { field: "ask google or type url", value: "artificial intelligence" }, category: "fill_standard" },
 
   // --- Category: fill_terse (shorthand field + value, no verbs) ---
   { id: "ft-1", utterance: "name Alex", expectedIntent: "FILL_FIELD", expectedSlots: { field: "name", value: "Alex" }, category: "fill_terse" },
