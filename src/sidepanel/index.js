@@ -1,9 +1,27 @@
 import { MESSAGE_TYPES, createMessage } from "../shared/message-types.js";
+import { TTSQueue } from "./tts-queue.js";
 
 const toggleBtn = document.getElementById("toggle-mic");
 const statusDiv = document.getElementById("status");
 const transcriptDiv = document.getElementById("transcript");
 const intentJsonDiv = document.getElementById("intent-json");
+const btnTtsStop = document.getElementById("tts-stop");
+
+const ttsQueue = new TTSQueue();
+ttsQueue.onStateChange = (state) => {
+  if (state === "speaking") {
+    if (statusDiv && !shouldBeListening) statusDiv.textContent = "Speaking...";
+  } else if (state === "paused") {
+    if (statusDiv) statusDiv.textContent = "Speech paused.";
+  } else if (state === "idle") {
+    if (statusDiv && !shouldBeListening) statusDiv.textContent = "Ready";
+  }
+};
+
+btnTtsStop?.addEventListener("click", () => {
+  ttsQueue.stop();
+  if (statusDiv) statusDiv.textContent = "Speech stopped.";
+});
 
 let shouldBeListening = false;
 let recognition = null;
@@ -17,13 +35,13 @@ console.log("[VERBA] Side panel loaded. Manual input ready.");
 // Initialize Web Speech API
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-// TTS Readback Helper (Hand-off 8 / Confirmation Gate)
-function speakReadback(text) {
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.0;
-  utterance.pitch = 1.0;
-  window.speechSynthesis.speak(utterance);
+// TTS Readback Helper (Ordered Queue / Interruptible)
+function speakReadback(text, options = {}) {
+  if (options.urgent) {
+    ttsQueue.interrupt(text, options);
+  } else {
+    ttsQueue.enqueue(text, options);
+  }
 }
 
 // Open permission tab helper
@@ -44,7 +62,23 @@ function promptMicAuthorization() {
 // Listen for broker events (e.g., spoken readback, parsed intent)
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPEAK_CONFIRMATION && message.payload?.text) {
-    speakReadback(message.payload.text);
+    speakReadback(message.payload.text, { urgent: message.payload.urgent ?? true });
+  }
+
+  if (message.type === MESSAGE_TYPES.TTS_SPEAK && message.payload?.text) {
+    speakReadback(message.payload.text, message.payload.options || {});
+  }
+
+  if (message.type === MESSAGE_TYPES.TTS_STOP) {
+    ttsQueue.stop();
+  }
+
+  if (message.type === MESSAGE_TYPES.TTS_PAUSE) {
+    ttsQueue.pause();
+  }
+
+  if (message.type === MESSAGE_TYPES.TTS_RESUME) {
+    ttsQueue.resume();
   }
 
   // P2's parsed intent, broadcast from the background broker after every

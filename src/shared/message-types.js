@@ -23,8 +23,12 @@ export const MESSAGE_TYPES = Object.freeze({
   VAULT_CLEAR: "VAULT_CLEAR",
 
   // Background broker / P3 -> side panel (P1): speak a TTS readback
-  // (used for the confirmation-gate safety flow).
+  // (used for the confirmation-gate safety flow and action spoken feedback).
   SPEAK_CONFIRMATION: "SPEAK_CONFIRMATION",
+  TTS_SPEAK: "TTS_SPEAK",
+  TTS_STOP: "TTS_STOP",
+  TTS_PAUSE: "TTS_PAUSE",
+  TTS_RESUME: "TTS_RESUME",
 
   // Background broker -> UI: signals that a pending action is awaiting user confirmation.
   CONFIRMATION_REQUIRED: "CONFIRMATION_REQUIRED",
