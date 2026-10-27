@@ -490,6 +490,49 @@
     return { ok: true, selector: payload.selector, previous, value: currentValue };
   }
 
+  function jaroWinkler(s1, s2) {
+    if (!s1 || !s2) return 0;
+    const a = s1.toLowerCase().trim();
+    const b = s2.toLowerCase().trim();
+    if (a === b) return 1.0;
+    if (a.includes(b) || b.includes(a)) return 0.85 + 0.15 * (Math.min(a.length, b.length) / Math.max(a.length, b.length));
+
+    const maxDist = Math.floor(Math.max(a.length, b.length) / 2) - 1;
+    const aMatches = new Array(a.length).fill(false);
+    const bMatches = new Array(b.length).fill(false);
+    let matches = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      const start = Math.max(0, i - maxDist);
+      const end = Math.min(i + maxDist + 1, b.length);
+      for (let j = start; j < end; j++) {
+        if (!bMatches[j] && a[i] === b[j]) {
+          aMatches[i] = true;
+          bMatches[j] = true;
+          matches++;
+          break;
+        }
+      }
+    }
+    if (matches === 0) return 0;
+
+    let k = 0;
+    let transpositions = 0;
+    for (let i = 0; i < a.length; i++) {
+      if (aMatches[i]) {
+        while (!bMatches[k]) k++;
+        if (a[i] !== b[k]) transpositions++;
+        k++;
+      }
+    }
+    const sim = (matches / a.length + matches / b.length + (matches - transpositions / 2) / matches) / 3;
+    let prefix = 0;
+    for (let i = 0; i < Math.min(4, Math.min(a.length, b.length)); i++) {
+      if (a[i] === b[i]) prefix++; else break;
+    }
+    return sim + prefix * 0.1 * (1 - sim);
+  }
+
   function executeAction(payload) {
     if (!payload || !payload.action) return { ok: false, error: 'missing action' };
     const act = String(payload.action).toUpperCase();
@@ -510,6 +553,22 @@
       return { ok: false, error: 'no form or submit button found' };
     }
 
+    if (act === 'RESET_FORM') {
+      const forms = Array.from(document.querySelectorAll('form'));
+      if (forms.length > 0) {
+        forms.forEach((f) => f.reset());
+      } else {
+        document.querySelectorAll('input, select, textarea').forEach((el) => {
+          if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+          else el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+      document.querySelectorAll(`[${HL_ATTR}]`).forEach(clearHighlight);
+      return { ok: true, action: 'RESET_FORM' };
+    }
+
     if (act === 'CLICK') {
       const target = String(payload.target || '').trim().toLowerCase();
       if (!target) return { ok: false, error: 'missing click target' };
@@ -517,9 +576,37 @@
       try {
         const el = document.querySelector(payload.target);
         if (el) { el.click(); return { ok: true, action: 'CLICK', selector: payload.target }; }
-      } catch (e) { /* not a valid selector, fallback to text matching */ }
+      } catch (e) { /* not a valid selector, fallback */ }
 
-      const clickables = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], label'));
+      // Rank clickable elements by text, aria-label, title
+      const clickables = Array.from(
+        document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="link"], label')
+      ).filter(isVisible);
+
+      const scored = clickables.map((el) => {
+        const label = cleanText(el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || el.value || '');
+        const score = jaroWinkler(target, label);
+        return { element: el, label, score };
+      }).filter((item) => item.score > 0.45);
+
+      scored.sort((a, b) => b.score - a.score);
+
+      if (scored.length > 0 && scored[0].score >= 0.6) {
+        // Check for ambiguous top-2 matches
+        if (scored.length >= 2 && scored[1].score >= 0.6 && (scored[0].score - scored[1].score) < 0.08) {
+          return {
+            ok: false,
+            ambiguous: true,
+            action: 'CLICK',
+            options: [scored[0].label, scored[1].label],
+            prompt: `Did you mean ${scored[0].label} or ${scored[1].label}?`,
+          };
+        }
+        scored[0].element.click();
+        return { ok: true, action: 'CLICK', target: scored[0].label };
+      }
+
+      // Fallback substring matching
       const found = clickables.find((el) => cleanText(el.textContent).toLowerCase() === target) ||
         clickables.find((el) => cleanText(el.textContent).toLowerCase().includes(target)) ||
         clickables.find((el) => (el.value && String(el.value).toLowerCase() === target));
@@ -529,6 +616,173 @@
         return { ok: true, action: 'CLICK', target };
       }
       return { ok: false, error: `clickable element "${target}" not found` };
+    }
+
+    if (act === 'CHECK_BOX' || act === 'UNCHECK_BOX') {
+      const target = String(payload.target || '').trim().toLowerCase();
+      const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]')).filter(isVisible);
+      if (checkboxes.length === 0) {
+        return { ok: false, error: 'no checkboxes found on page' };
+      }
+
+      const scored = checkboxes.map((cb) => {
+        const labelEl = cb.id ? document.querySelector(`label[for="${cb.id}"]`) : cb.closest('label');
+        const text = cleanText(cb.getAttribute('aria-label') || labelEl?.textContent || cb.name || cb.id || '');
+        return { element: cb, label: text, score: jaroWinkler(target, text) };
+      });
+      scored.sort((a, b) => b.score - a.score);
+
+      const best = scored[0] && (scored[0].score > 0.45 || !target) ? scored[0] : null;
+      if (best) {
+        const shouldCheck = (act === 'CHECK_BOX');
+        best.element.checked = shouldCheck;
+        best.element.dispatchEvent(new Event('input', { bubbles: true }));
+        best.element.dispatchEvent(new Event('change', { bubbles: true }));
+        highlight(best.element);
+        return { ok: true, action: act, target: best.label || target };
+      }
+      return { ok: false, error: `checkbox "${target}" not found` };
+    }
+
+    if (act === 'FOCUS_FIELD') {
+      const target = String(payload.field || payload.target || '').trim().toLowerCase();
+      const fields = scanFields();
+      const scored = fields.map((f) => ({
+        field: f,
+        score: jaroWinkler(target, f.label)
+      })).sort((a, b) => b.score - a.score);
+
+      if (scored.length > 0 && scored[0].score > 0.4) {
+        const el = document.querySelector(`[${ID_ATTR}="${scored[0].field.verbaId}"]`);
+        if (el) {
+          el.focus();
+          highlight(el);
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return { ok: true, action: 'FOCUS_FIELD', target: scored[0].field.label };
+        }
+      }
+      return { ok: false, error: `field "${target}" not found to focus` };
+    }
+
+    if (act === 'FIND_ON_PAGE') {
+      const query = String(payload.query || payload.target || '').trim();
+      if (!query) return { ok: false, error: 'missing search query' };
+      const found = window.find ? window.find(query, false, false, true, false, true, false) : false;
+      return { ok: found, action: 'FIND_ON_PAGE', query, found };
+    }
+
+    if (act === 'PRINT_PAGE') {
+      window.print();
+      return { ok: true, action: 'PRINT_PAGE' };
+    }
+
+    if (act === 'UPLOAD_FILE') {
+      const fileInput = document.querySelector('input[type="file"]');
+      if (fileInput) {
+        fileInput.focus();
+        highlight(fileInput);
+        fileInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return { ok: true, action: 'UPLOAD_FILE', notice: 'file_chooser_manual' };
+      }
+      return { ok: false, error: 'no file input found on page' };
+    }
+
+    // Media Controls
+    if (
+      act === 'PLAY_MEDIA' || act === 'PAUSE_MEDIA' || act === 'MUTE_MEDIA' ||
+      act === 'UNMUTE_MEDIA' || act === 'VOLUME_UP' || act === 'VOLUME_DOWN' ||
+      act === 'FULLSCREEN_MEDIA'
+    ) {
+      const media = document.querySelector('video, audio');
+      if (!media) {
+        return { ok: false, error: 'no media element found on page' };
+      }
+      if (act === 'PLAY_MEDIA') {
+        media.play();
+        return { ok: true, action: 'PLAY_MEDIA' };
+      }
+      if (act === 'PAUSE_MEDIA') {
+        media.pause();
+        return { ok: true, action: 'PAUSE_MEDIA' };
+      }
+      if (act === 'MUTE_MEDIA') {
+        media.muted = true;
+        return { ok: true, action: 'MUTE_MEDIA' };
+      }
+      if (act === 'UNMUTE_MEDIA') {
+        media.muted = false;
+        return { ok: true, action: 'UNMUTE_MEDIA' };
+      }
+      if (act === 'VOLUME_UP') {
+        media.volume = Math.min(1.0, media.volume + 0.2);
+        media.muted = false;
+        return { ok: true, action: 'VOLUME_UP', volume: media.volume };
+      }
+      if (act === 'VOLUME_DOWN') {
+        media.volume = Math.max(0.0, media.volume - 0.2);
+        return { ok: true, action: 'VOLUME_DOWN', volume: media.volume };
+      }
+      if (act === 'FULLSCREEN_MEDIA') {
+        if (media.requestFullscreen) media.requestFullscreen();
+        return { ok: true, action: 'FULLSCREEN_MEDIA' };
+      }
+    }
+
+    // Section Navigation (headings, landmarks, footer, contact...)
+    if (act === 'NAVIGATE_SECTION' || act === 'NAVIGATE') {
+      const destination = String(payload.destination || payload.target || '').trim().toLowerCase();
+      if (destination) {
+        const sections = Array.from(
+          document.querySelectorAll('h1, h2, h3, h4, h5, h6, section, article, footer, header, nav, main, [role="region"], [role="contentinfo"]')
+        );
+        const scored = sections.map((sec) => {
+          const txt = cleanText(sec.getAttribute('aria-label') || sec.id || sec.textContent?.slice(0, 80) || '');
+          return { element: sec, label: txt, score: jaroWinkler(destination, txt) };
+        }).filter((item) => item.score > 0.45);
+
+        scored.sort((a, b) => b.score - a.score);
+        if (scored.length > 0) {
+          scored[0].element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return { ok: true, action: 'NAVIGATE_SECTION', destination: scored[0].label };
+        }
+      }
+      return { ok: false, error: `section "${destination}" not found` };
+    }
+
+    // Read Aloud Content Extraction (READ_PAGE / READ_SECTION)
+    if (act === 'READ_PAGE' || act === 'READ_SECTION') {
+      let root = document.querySelector('main, article, [role="main"]') || document.body;
+      if (act === 'READ_SECTION' && payload.section) {
+        const secQuery = String(payload.section).toLowerCase();
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, section, [id]'));
+        const matchedHeading = headings.find((h) => cleanText(h.textContent).toLowerCase().includes(secQuery) || h.id.toLowerCase().includes(secQuery));
+        if (matchedHeading) {
+          root = matchedHeading.closest('section, article') || matchedHeading.parentElement || matchedHeading;
+        }
+      }
+
+      if (!root) return { ok: false, error: 'no readable content found' };
+
+      const clone = root.cloneNode(true);
+      clone.querySelectorAll('script, style, noscript, nav, header, footer, aside, iframe, svg, [aria-hidden="true"], .advertisement, .ad').forEach((n) => n.remove());
+      const rawText = cleanText(clone.textContent);
+      if (!rawText) return { ok: false, error: 'readable text is empty' };
+
+      // Split into clean sentence-sized chunks for TTS queue (~100-200 chars)
+      const sentences = rawText.match(/[^.!?]+[.!?]+|\S+/g) || [rawText];
+      const chunks = [];
+      let currentChunk = '';
+      for (const s of sentences) {
+        if ((currentChunk + ' ' + s).length > 180 && currentChunk.length > 0) {
+          chunks.push(currentChunk.trim());
+          currentChunk = s;
+        } else {
+          currentChunk += (currentChunk ? ' ' : '') + s;
+        }
+      }
+      if (currentChunk.trim()) chunks.push(currentChunk.trim());
+
+      return { ok: true, action: act, chunks: chunks.slice(0, 15) };
     }
 
     if (act === 'SCROLL_UP') {

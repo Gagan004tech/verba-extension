@@ -187,6 +187,15 @@ async function handleTranscript(text) {
   }
 }
 
+// --- Spoken Feedback Helper -------------------------------------------
+function speakFeedback(text, options = {}) {
+  chrome.runtime
+    .sendMessage(
+      createMessage(MESSAGE_TYPES.TTS_SPEAK, { text, options })
+    )
+    .catch(() => {});
+}
+
 /**
  * Dispatches an individual parsed intent through the pipeline.
  *
@@ -195,6 +204,16 @@ async function handleTranscript(text) {
  */
 async function dispatchIntent(result, rawTranscript) {
   const { intent, slots } = result;
+
+  // Spoken pause/resume/stop controls for TTS & media
+  const normText = (rawTranscript || "").trim().toLowerCase();
+  if (normText === "stop" || normText === "stop reading") {
+    chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TTS_STOP)).catch(() => {});
+  } else if (normText === "pause" || normText === "pause reading") {
+    chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TTS_PAUSE)).catch(() => {});
+  } else if (normText === "resume" || normText === "continue reading") {
+    chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TTS_RESUME)).catch(() => {});
+  }
 
   // 1. Check Confirmation Gate State
   if (pendingConfirmation) {
@@ -207,9 +226,7 @@ async function dispatchIntent(result, rawTranscript) {
         .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "confirmed", action: actionToExecute.action }))
         .catch(() => {});
 
-      chrome.runtime
-        .sendMessage(createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, { text: "Action confirmed. Proceeding." }))
-        .catch(() => {});
+      speakFeedback("Action confirmed. Proceeding.", { urgent: true });
 
       if (actionToExecute.action === "SUBMIT") {
         requestAction({ action: "SUBMIT" }, actionToExecute.tabId);
@@ -227,9 +244,7 @@ async function dispatchIntent(result, rawTranscript) {
         .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "cancelled" }))
         .catch(() => {});
 
-      chrome.runtime
-        .sendMessage(createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, { text: "Action cancelled." }))
-        .catch(() => {});
+      speakFeedback("Action cancelled.", { urgent: true });
       return;
     }
   }
@@ -239,13 +254,7 @@ async function dispatchIntent(result, rawTranscript) {
     const tabId = await getTargetTabId();
     pendingConfirmation = { action: "SUBMIT", tabId, timestamp: Date.now() };
 
-    chrome.runtime
-      .sendMessage(
-        createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, {
-          text: "Are you sure you want to submit the form? Say yes to confirm, or no to cancel.",
-        })
-      )
-      .catch(() => {});
+    speakFeedback("Are you sure you want to submit the form? Say yes to confirm, or no to cancel.", { urgent: true });
 
     chrome.runtime
       .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_REQUIRED, { action: "SUBMIT" }))
@@ -259,19 +268,343 @@ async function dispatchIntent(result, rawTranscript) {
     return;
   }
 
-  // 4. In-page click
-  if (intent === "CLICK") {
-    const tabId = await getTargetTabId();
-    requestAction({ action: "CLICK", target: slots.target }, tabId);
+  // 4. Tab & Window Management (Background Worker APIs)
+  if (intent === "NEW_TAB") {
+    chrome.tabs.create({}, () => {
+      speakFeedback("Opened new tab.");
+    });
     return;
   }
 
-  // 5. Scroll commands
-  if (intent.startsWith("SCROLL_")) {
+  if (intent === "CLOSE_TAB") {
     const tabId = await getTargetTabId();
-    requestAction({ action: intent }, tabId);
+    if (tabId) {
+      chrome.tabs.remove(tabId, () => {
+        speakFeedback("Closed tab.");
+      });
+    }
     return;
   }
+
+  if (intent === "NEXT_TAB") {
+    chrome.tabs.query({ currentWindow: true }, (tabs) => {
+      if (tabs && tabs.length > 1) {
+        const activeIdx = tabs.findIndex((t) => t.active);
+        const nextIdx = (activeIdx + 1) % tabs.length;
+        chrome.tabs.update(tabs[nextIdx].id, { active: true }, () => {
+          speakFeedback("Switched to next tab.");
+        });
+      } else {
+        speakFeedback("No other tab to switch to.");
+      }
+    });
+    return;
+  }
+
+  if (intent === "PREVIOUS_TAB") {
+    chrome.tabs.query({ currentWindow: true }, (tabs) => {
+      if (tabs && tabs.length > 1) {
+        const activeIdx = tabs.findIndex((t) => t.active);
+        const prevIdx = (activeIdx - 1 + tabs.length) % tabs.length;
+        chrome.tabs.update(tabs[prevIdx].id, { active: true }, () => {
+          speakFeedback("Switched to previous tab.");
+        });
+      } else {
+        speakFeedback("No previous tab to switch to.");
+      }
+    });
+    return;
+  }
+
+  if (intent === "GO_BACK") {
+    const tabId = await getTargetTabId();
+    if (tabId) {
+      chrome.tabs.goBack(tabId, () => {
+        if (chrome.runtime.lastError) speakFeedback("Can't go back any further.");
+        else speakFeedback("Going back.");
+      });
+    }
+    return;
+  }
+
+  if (intent === "GO_FORWARD") {
+    const tabId = await getTargetTabId();
+    if (tabId) {
+      chrome.tabs.goForward(tabId, () => {
+        if (chrome.runtime.lastError) speakFeedback("Can't go forward any further.");
+        else speakFeedback("Going forward.");
+      });
+    }
+    return;
+  }
+
+  if (intent === "REFRESH_PAGE") {
+    const tabId = await getTargetTabId();
+    if (tabId) {
+      chrome.tabs.reload(tabId, {}, () => {
+        speakFeedback("Page reloaded.");
+      });
+    }
+    return;
+  }
+
+  if (intent === "MINIMIZE_WINDOW") {
+    chrome.windows.getCurrent((win) => {
+      if (win?.id) {
+        chrome.windows.update(win.id, { state: "minimized" }, () => {
+          speakFeedback("Window minimized.");
+        });
+      }
+    });
+    return;
+  }
+
+  if (intent === "MAXIMIZE_WINDOW") {
+    chrome.windows.getCurrent((win) => {
+      if (win?.id) {
+        chrome.windows.update(win.id, { state: "maximized" }, () => {
+          speakFeedback("Window maximized.");
+        });
+      }
+    });
+    return;
+  }
+
+  // 5. Zoom Commands
+  if (intent === "ZOOM_IN") {
+    const tabId = await getTargetTabId();
+    if (tabId) {
+      chrome.tabs.getZoom(tabId, (current) => {
+        const nextZoom = Math.min(3.0, (current || 1.0) + 0.2);
+        chrome.tabs.setZoom(tabId, nextZoom, () => {
+          speakFeedback("Zoomed in.");
+        });
+      });
+    }
+    return;
+  }
+
+  if (intent === "ZOOM_OUT") {
+    const tabId = await getTargetTabId();
+    if (tabId) {
+      chrome.tabs.getZoom(tabId, (current) => {
+        const nextZoom = Math.max(0.3, (current || 1.0) - 0.2);
+        chrome.tabs.setZoom(tabId, nextZoom, () => {
+          speakFeedback("Zoomed out.");
+        });
+      });
+    }
+    return;
+  }
+
+  if (intent === "RESET_ZOOM") {
+    const tabId = await getTargetTabId();
+    if (tabId) {
+      chrome.tabs.setZoom(tabId, 1.0, () => {
+        speakFeedback("Zoom reset.");
+      });
+    }
+    return;
+  }
+
+  // 6. Bookmarks & History Lookup
+  if (intent === "BOOKMARK_PAGE") {
+    const tabId = await getTargetTabId();
+    if (tabId) {
+      chrome.tabs.get(tabId, (tab) => {
+        if (tab?.url && chrome.bookmarks?.create) {
+          chrome.bookmarks.create({ title: tab.title || "New Bookmark", url: tab.url }, () => {
+            speakFeedback(`Bookmarked ${tab.title || "page"}.`);
+          });
+        } else {
+          speakFeedback("Could not bookmark page.");
+        }
+      });
+    }
+    return;
+  }
+
+  // 7. Navigation (URL / History / Section / Link)
+  if (intent === "NAVIGATE") {
+    const dest = (slots?.destination || "").trim();
+    const tabId = await getTargetTabId();
+
+    // Check if it asks for history (e.g. "yesterday's page about X")
+    const histMatch = dest.match(/^(?:yesterday(?:'s)?(?:\s+page)?\s+about\s+|history\s+about\s+)(.+)$/i);
+    if (histMatch && chrome.history?.search) {
+      const query = histMatch[1].trim();
+      chrome.history.search({ text: query, maxResults: 1 }, (results) => {
+        if (results && results.length > 0) {
+          chrome.tabs.create({ url: results[0].url }, () => {
+            speakFeedback(`Opened ${results[0].title || "page"} from history.`);
+          });
+        } else {
+          speakFeedback(`No history page found about ${query}.`);
+        }
+      });
+      return;
+    }
+
+    // Check if destination is a URL or external website domain
+    const isUrl = /^(?:https?:\/\/|[a-z0-9-]+\.(?:com|org|net|gov|edu|io|co|in|ai|app|dev))(?:\/.*)?$/i.test(dest);
+    if (isUrl) {
+      const url = dest.startsWith("http") ? dest : `https://${dest}`;
+      if (tabId) {
+        chrome.tabs.update(tabId, { url }, () => {
+          speakFeedback(`Opening ${dest}.`);
+        });
+      }
+      return;
+    }
+
+    // Otherwise, attempt in-page section navigation or link following
+    if (tabId) {
+      const res = await requestAction({ action: "NAVIGATE_SECTION", destination: dest }, tabId);
+      if (res.ok) {
+        speakFeedback(`Scrolled to ${dest}.`);
+        return;
+      }
+
+      // Try clickable link matching
+      const clickRes = await requestAction({ action: "CLICK", target: dest }, tabId);
+      if (clickRes.ok) {
+        speakFeedback(`Navigated to ${clickRes.target || dest}.`);
+      } else if (clickRes.ambiguous) {
+        speakFeedback(clickRes.prompt || `Did you mean ${clickRes.options?.[0]} or ${clickRes.options?.[1]}?`, { urgent: true });
+      } else {
+        speakFeedback(`Couldn't find section or link for ${dest}.`);
+      }
+    }
+    return;
+  }
+
+  // 8. In-page click
+  if (intent === "CLICK") {
+    const tabId = await getTargetTabId();
+    const res = await requestAction({ action: "CLICK", target: slots.target }, tabId);
+    if (res.ok) {
+      speakFeedback(`Clicked ${res.target || slots.target}.`);
+    } else if (res.ambiguous) {
+      speakFeedback(res.prompt || `Did you mean ${res.options?.[0]} or ${res.options?.[1]}?`, { urgent: true });
+    } else {
+      speakFeedback(`Couldn't find a button or link called ${slots.target}.`);
+    }
+    return;
+  }
+
+  // 9. Scroll commands
+  if (intent.startsWith("SCROLL_")) {
+    const tabId = await getTargetTabId();
+    await requestAction({ action: intent }, tabId);
+    const scrollMap = {
+      SCROLL_UP: "Scrolled up.",
+      SCROLL_DOWN: "Scrolled down.",
+      SCROLL_TOP: "Scrolled to top.",
+      SCROLL_BOTTOM: "Scrolled to bottom.",
+    };
+    speakFeedback(scrollMap[intent] || "Scrolled.");
+    return;
+  }
+
+  // 10. Checkbox controls
+  if (intent === "CHECK_BOX" || intent === "UNCHECK_BOX") {
+    const tabId = await getTargetTabId();
+    const res = await requestAction({ action: intent, target: slots.target }, tabId);
+    if (res.ok) {
+      speakFeedback(`${intent === "CHECK_BOX" ? "Checked" : "Unchecked"} ${res.target || slots.target}.`);
+    } else {
+      speakFeedback(`Couldn't find checkbox for ${slots.target}.`);
+    }
+    return;
+  }
+
+  // 11. Focus field
+  if (intent === "FOCUS_FIELD") {
+    const tabId = await getTargetTabId();
+    const res = await requestAction({ action: "FOCUS_FIELD", field: slots.field }, tabId);
+    if (res.ok) {
+      speakFeedback(`Focused ${res.target || slots.field} field.`);
+    } else {
+      speakFeedback(`Couldn't find ${slots.field} field to focus.`);
+    }
+    return;
+  }
+
+  // 12. Find on page
+  if (intent === "FIND_ON_PAGE") {
+    const tabId = await getTargetTabId();
+    const res = await requestAction({ action: "FIND_ON_PAGE", query: slots.query }, tabId);
+    if (res.ok && res.found) {
+      speakFeedback(`Found ${slots.query} on page.`);
+    } else {
+      speakFeedback(`Couldn't find ${slots.query} on this page.`);
+    }
+    return;
+  }
+
+  // 13. Print page
+  if (intent === "PRINT_PAGE") {
+    const tabId = await getTargetTabId();
+    await requestAction({ action: "PRINT_PAGE" }, tabId);
+    speakFeedback("Printing page.");
+    return;
+  }
+
+  // 14. Media Controls
+  if (
+    intent === "PLAY_MEDIA" || intent === "PAUSE_MEDIA" || intent === "MUTE_MEDIA" ||
+    intent === "UNMUTE_MEDIA" || intent === "VOLUME_UP" || intent === "VOLUME_DOWN" ||
+    intent === "FULLSCREEN_MEDIA"
+  ) {
+    const tabId = await getTargetTabId();
+    const res = await requestAction({ action: intent }, tabId);
+    if (res.ok) {
+      const mediaMap = {
+        PLAY_MEDIA: "Playing media.",
+        PAUSE_MEDIA: "Media paused.",
+        MUTE_MEDIA: "Media muted.",
+        UNMUTE_MEDIA: "Media unmuted.",
+        VOLUME_UP: "Volume increased.",
+        VOLUME_DOWN: "Volume decreased.",
+        FULLSCREEN_MEDIA: "Entered fullscreen.",
+      };
+      speakFeedback(mediaMap[intent] || "Media updated.");
+    } else {
+      speakFeedback("No video or audio found on page.");
+    }
+    return;
+  }
+
+  // 15. Upload file (file chooser manual action notice)
+  if (intent === "UPLOAD_FILE") {
+    const tabId = await getTargetTabId();
+    const res = await requestAction({ action: "UPLOAD_FILE", field: slots.field }, tabId);
+    if (res.ok) {
+      speakFeedback("A file chooser requires manual selection in the browser.");
+    } else {
+      speakFeedback("No file upload field found on this page.");
+    }
+    return;
+  }
+
+  // 16. Read Page / Read Section
+  if (intent === "READ_PAGE" || intent === "READ_SECTION") {
+    const tabId = await getTargetTabId();
+    const res = await requestAction({ action: intent, section: slots.section }, tabId);
+    if (res.ok && res.chunks && res.chunks.length > 0) {
+      speakFeedback(`Reading ${slots.section ? slots.section : "page"} aloud.`);
+      for (const chunk of res.chunks) {
+        chrome.runtime
+          .sendMessage(createMessage(MESSAGE_TYPES.TTS_SPEAK, { text: chunk, options: { urgent: false } }))
+          .catch(() => {});
+      }
+    } else {
+      speakFeedback("No readable content found on this page.");
+    }
+    return;
+  }
+
+  // 17. Form reset / clear
 
   // 6. Form reset / clear
   if (intent === "RESET_FORM") {
@@ -434,15 +767,24 @@ async function requestFill(selector, value, tabId = null) {
 
 async function requestAction(payload, tabId = null) {
   const targetId = tabId || (await getTargetTabId());
-  if (!targetId) return console.warn("[VERBA] No content script or active tab available to execute action.");
-  chrome.tabs.sendMessage(
-    targetId,
-    { type: MESSAGE_TYPES.EXECUTE_ACTION, payload },
-    (response) => {
-      if (chrome.runtime.lastError) return console.warn("[VERBA] EXECUTE_ACTION failed:", chrome.runtime.lastError.message);
-      console.log("[VERBA] EXECUTE_ACTION response:", response);
-    }
-  );
+  if (!targetId) {
+    console.warn("[VERBA] No content script or active tab available to execute action.");
+    return { ok: false, error: "no target tab" };
+  }
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(
+      targetId,
+      { type: MESSAGE_TYPES.EXECUTE_ACTION, payload },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn("[VERBA] EXECUTE_ACTION failed:", chrome.runtime.lastError.message);
+          return resolve({ ok: false, error: chrome.runtime.lastError.message });
+        }
+        console.log("[VERBA] EXECUTE_ACTION response:", response);
+        resolve(response || { ok: true });
+      }
+    );
+  });
 }
 
 // expose for manual testing in the service-worker DevTools console
