@@ -7,13 +7,20 @@
 // MESSAGE_TYPES instead of hardcoding string literals, so a typo in one
 // file can't silently desync the broker's routing from the senders.
 
+export const PROFILE_KEYS = Object.freeze(["pan", "name", "dob", "address", "phone"]);
+
 export const MESSAGE_TYPES = Object.freeze({
   // Side panel (P1) -> background broker: live transcript from the Web
   // Speech API, or the manual-input fallback.
   TRANSCRIPT_STREAM: "TRANSCRIPT_STREAM",
 
-  // Background broker -> side panel (P1): request a value from the vault.
+  // Background broker -> side panel (P1) / Vault: request a value from the vault.
   VAULT_FETCH: "VAULT_FETCH",
+  VAULT_STATUS: "VAULT_STATUS",
+  VAULT_UNLOCK: "VAULT_UNLOCK",
+  VAULT_LOCK: "VAULT_LOCK",
+  VAULT_SAVE: "VAULT_SAVE",
+  VAULT_CLEAR: "VAULT_CLEAR",
 
   // Background broker / P3 -> side panel (P1): speak a TTS readback
   // (used for the confirmation-gate safety flow).

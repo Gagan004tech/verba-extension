@@ -10,8 +10,9 @@
 // it can't drift from what the vault actually stores.
 
 import { SYNONYM_DICTIONARY } from "../matching/synonym-dictionary.js";
+import { PROFILE_KEYS } from "../shared/message-types.js";
 
-export const PROFILE_KEYS = ["pan", "name", "dob", "address", "phone"];
+export { PROFILE_KEYS };
 
 const PROFILE_PHRASES = [
   /from\s+my\s+profile$/i,

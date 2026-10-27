@@ -2,60 +2,203 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VERBA Voice Assistant</title>
   <style>
     body {
-      font-family: sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding: 16px;
       margin: 0;
-      background: #f9f9f9;
+      background: #f4f6f8;
+      color: #111;
+      font-size: 15px;
+      line-height: 1.4;
     }
+    h2, h3 {
+      margin-top: 0;
+      color: #0f172a;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .badge-locked { background: #fee2e2; color: #b91c1c; }
+    .badge-unlocked { background: #dcfce7; color: #15803d; }
+    .badge-empty { background: #f1f5f9; color: #475569; }
+
     button {
       padding: 10px 16px;
-      font-size: 14px;
+      font-size: 15px;
       cursor: pointer;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-      background: #007bff;
+      border-radius: 6px;
+      border: 1px solid #0056b3;
+      background: #0284c7;
       color: white;
-      font-weight: bold;
+      font-weight: 600;
+      transition: background 0.15s ease-in-out;
     }
     button:hover {
-      background: #0056b3;
+      background: #0369a1;
+    }
+    button.btn-secondary {
+      background: #64748b;
+      border-color: #475569;
+    }
+    button.btn-secondary:hover {
+      background: #475569;
+    }
+    button.btn-danger {
+      background: #dc2626;
+      border-color: #b91c1c;
+    }
+    button.btn-danger:hover {
+      background: #b91c1c;
+    }
+    button.btn-success {
+      background: #16a34a;
+      border-color: #15803d;
+    }
+    button.btn-success:hover {
+      background: #15803d;
     }
     #status {
-      margin-top: 12px;
-      color: #666;
-      font-style: italic;
+      margin-top: 10px;
+      font-weight: 500;
+      color: #334155;
     }
     #transcript {
-      margin-top: 16px;
+      margin-top: 12px;
       padding: 12px;
       background: white;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      min-height: 48px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      min-height: 44px;
+      font-size: 15px;
     }
     #intent-json {
       margin-top: 12px;
       padding: 12px;
-      background: #1e1e1e;
-      color: #9cdcfe;
-      border-radius: 4px;
-      font-family: "Courier New", monospace;
+      background: #0f172a;
+      color: #38bdf8;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 12px;
       white-space: pre-wrap;
       word-break: break-word;
       min-height: 24px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .panel-section {
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 14px;
+      margin-top: 16px;
+    }
+    .form-group {
+      margin-bottom: 10px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+    .form-control {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      font-size: 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+    }
+    .form-control:focus {
+      outline: 2px solid #0284c7;
+      border-color: transparent;
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    #vault-feedback {
+      margin-top: 8px;
+      font-size: 13px;
+      font-weight: 500;
     }
   </style>
 </head>
 <body>
   <h2>VERBA Assistant</h2>
-  <button id="toggle-mic">Start Listening</button>
-  <div id="status">Ready</div>
-  <div id="transcript">Spoken commands will appear here...</div>
-  <div id="intent-json">Parsed intent JSON will appear here...</div>
+  
+  <div class="panel-section">
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button id="toggle-mic">Start Listening</button>
+      <button id="tts-stop" class="btn-secondary" title="Stop speech output">Stop TTS</button>
+    </div>
+    <div id="status" aria-live="polite">Ready</div>
+    <div id="transcript" aria-live="polite">Spoken commands will appear here...</div>
+    <div id="intent-json">Parsed intent JSON will appear here...</div>
+  </div>
+
+  <div class="panel-section" id="vault-panel">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 style="margin: 0;">Secure Profile Vault</h3>
+      <span id="vault-badge" class="badge badge-locked">Locked</span>
+    </div>
+    <p style="font-size: 13px; color: #64748b; margin: 6px 0 12px 0;">
+      Encrypted locally with AES-256-GCM. Unlocks in memory only.
+    </p>
+
+    <div id="vault-auth-box">
+      <div class="form-group">
+        <label for="vault-passphrase">Vault Passphrase</label>
+        <input type="password" id="vault-passphrase" class="form-control" placeholder="Enter passphrase to unlock or save" />
+      </div>
+      <div class="btn-row">
+        <button id="btn-vault-unlock" class="btn-success">Unlock Vault</button>
+        <button id="btn-vault-lock" class="btn-secondary">Lock Vault</button>
+      </div>
+    </div>
+
+    <div id="vault-fields" style="margin-top: 14px;">
+      <div class="form-group">
+        <label for="prof-name">Full Name</label>
+        <input type="text" id="prof-name" class="form-control" placeholder="e.g. Alex Graham" />
+      </div>
+      <div class="form-group">
+        <label for="prof-dob">Date of Birth</label>
+        <input type="text" id="prof-dob" class="form-control" placeholder="e.g. 1990-05-15" />
+      </div>
+      <div class="form-group">
+        <label for="prof-pan">PAN</label>
+        <input type="text" id="prof-pan" class="form-control" placeholder="e.g. ABCDE1234F" />
+      </div>
+      <div class="form-group">
+        <label for="prof-address">Address</label>
+        <input type="text" id="prof-address" class="form-control" placeholder="e.g. 221B Baker Street" />
+      </div>
+      <div class="form-group">
+        <label for="prof-phone">Phone Number</label>
+        <input type="text" id="prof-phone" class="form-control" placeholder="e.g. 9876543210" />
+      </div>
+
+      <div class="btn-row" style="margin-top: 14px;">
+        <button id="btn-vault-save" class="btn-success">Save Profile</button>
+        <button id="btn-vault-forget" class="btn-danger">Forget All</button>
+      </div>
+    </div>
+
+    <div id="vault-feedback" aria-live="polite"></div>
+  </div>
 
   <script type="module" src="index.js"></script>
 </body>

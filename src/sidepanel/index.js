@@ -180,3 +180,146 @@ function enableManualInputFallback() {
     statusDiv.after(fallbackInput);
   }
 }
+
+// --- Vault UI Management ----------------------------------------------------
+const vaultBadge = document.getElementById("vault-badge");
+const vaultPassphrase = document.getElementById("vault-passphrase");
+const btnVaultUnlock = document.getElementById("btn-vault-unlock");
+const btnVaultLock = document.getElementById("btn-vault-lock");
+const btnVaultSave = document.getElementById("btn-vault-save");
+const btnVaultForget = document.getElementById("btn-vault-forget");
+const vaultFeedback = document.getElementById("vault-feedback");
+
+const inputName = document.getElementById("prof-name");
+const inputDob = document.getElementById("prof-dob");
+const inputPan = document.getElementById("prof-pan");
+const inputAddress = document.getElementById("prof-address");
+const inputPhone = document.getElementById("prof-phone");
+
+function showVaultMessage(msg, isError = false) {
+  if (!vaultFeedback) return;
+  vaultFeedback.textContent = msg;
+  vaultFeedback.style.color = isError ? "#dc2626" : "#16a34a";
+  setTimeout(() => {
+    if (vaultFeedback.textContent === msg) {
+      vaultFeedback.textContent = "";
+    }
+  }, 4000);
+}
+
+function updateVaultStatusUI() {
+  chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.VAULT_STATUS), (response) => {
+    if (chrome.runtime.lastError || !response) return;
+    const { hasProfile, isLocked } = response;
+    if (!hasProfile) {
+      vaultBadge.textContent = "No Profile";
+      vaultBadge.className = "badge badge-empty";
+    } else if (isLocked) {
+      vaultBadge.textContent = "Locked";
+      vaultBadge.className = "badge badge-locked";
+    } else {
+      vaultBadge.textContent = "Unlocked";
+      vaultBadge.className = "badge badge-unlocked";
+    }
+  });
+}
+
+btnVaultUnlock?.addEventListener("click", () => {
+  const passphrase = vaultPassphrase.value;
+  if (!passphrase) {
+    showVaultMessage("Please enter your passphrase.", true);
+    return;
+  }
+  chrome.runtime.sendMessage(
+    createMessage(MESSAGE_TYPES.VAULT_UNLOCK, { passphrase }),
+    (response) => {
+      if (response?.status === "ok") {
+        showVaultMessage("Vault unlocked successfully!");
+        vaultPassphrase.value = "";
+        updateVaultStatusUI();
+        // Load field values
+        loadProfileFields();
+      } else {
+        showVaultMessage(response?.error || "Incorrect passphrase.", true);
+      }
+    }
+  );
+});
+
+btnVaultLock?.addEventListener("click", () => {
+  chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.VAULT_LOCK), () => {
+    showVaultMessage("Vault locked.");
+    vaultPassphrase.value = "";
+    clearProfileFormInputs();
+    updateVaultStatusUI();
+  });
+});
+
+btnVaultSave?.addEventListener("click", () => {
+  const passphrase = vaultPassphrase.value;
+  if (!passphrase) {
+    showVaultMessage("Enter a passphrase to protect your profile.", true);
+    return;
+  }
+  const profile = {
+    name: inputName.value.trim(),
+    dob: inputDob.value.trim(),
+    pan: inputPan.value.trim(),
+    address: inputAddress.value.trim(),
+    phone: inputPhone.value.trim(),
+  };
+
+  chrome.runtime.sendMessage(
+    createMessage(MESSAGE_TYPES.VAULT_SAVE, { profile, passphrase }),
+    (response) => {
+      if (response?.status === "ok") {
+        showVaultMessage("Profile encrypted and saved!");
+        vaultPassphrase.value = "";
+        updateVaultStatusUI();
+      } else {
+        showVaultMessage(response?.error || "Failed to save profile.", true);
+      }
+    }
+  );
+});
+
+btnVaultForget?.addEventListener("click", () => {
+  if (!confirm("Are you sure you want to delete all saved profile data permanently?")) {
+    return;
+  }
+  chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.VAULT_CLEAR), () => {
+    showVaultMessage("All profile data permanently erased.");
+    clearProfileFormInputs();
+    vaultPassphrase.value = "";
+    updateVaultStatusUI();
+  });
+});
+
+function clearProfileFormInputs() {
+  if (inputName) inputName.value = "";
+  if (inputDob) inputDob.value = "";
+  if (inputPan) inputPan.value = "";
+  if (inputAddress) inputAddress.value = "";
+  if (inputPhone) inputPhone.value = "";
+}
+
+function loadProfileFields() {
+  const keys = ["name", "dob", "pan", "address", "phone"];
+  for (const k of keys) {
+    chrome.runtime.sendMessage(
+      createMessage(MESSAGE_TYPES.VAULT_FETCH, { key: k }),
+      (res) => {
+        if (res?.status === "ok" && res.value) {
+          if (k === "name" && inputName) inputName.value = res.value;
+          if (k === "dob" && inputDob) inputDob.value = res.value;
+          if (k === "pan" && inputPan) inputPan.value = res.value;
+          if (k === "address" && inputAddress) inputAddress.value = res.value;
+          if (k === "phone" && inputPhone) inputPhone.value = res.value;
+        }
+      }
+    );
+  }
+}
+
+// Initialize Vault UI status on load
+updateVaultStatusUI();

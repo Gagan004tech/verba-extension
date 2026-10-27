@@ -1,6 +1,7 @@
 import { MESSAGE_TYPES, createMessage } from "../shared/message-types.js";
 import { parseIntents, parseIntent } from "../nlu/intent-parser.js";
 import { rankFieldsFused, rankFieldsFast, MATCH_THRESHOLD } from "../matching/fused-matcher.js";
+import { ProfileVault } from "../vault/vault.js";
 
 // Enable the side panel to open on action icon click
 chrome.sidePanel
@@ -102,8 +103,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
 
     case MESSAGE_TYPES.VAULT_FETCH:
-      sendResponse({ status: "VAULT_READY" });
-      return false;
+      ProfileVault.fetchValue(payload?.key).then((res) => sendResponse(res));
+      return true;
+
+    case MESSAGE_TYPES.VAULT_STATUS:
+      ProfileVault.getStatus().then((res) => sendResponse(res));
+      return true;
+
+    case MESSAGE_TYPES.VAULT_UNLOCK:
+      ProfileVault.unlock(payload?.passphrase)
+        .then((res) => sendResponse(res))
+        .catch((err) => sendResponse({ status: "error", error: err.message || "Invalid passphrase" }));
+      return true;
+
+    case MESSAGE_TYPES.VAULT_LOCK:
+      ProfileVault.lock().then((res) => sendResponse(res));
+      return true;
+
+    case MESSAGE_TYPES.VAULT_SAVE:
+      ProfileVault.saveProfile(payload?.profile, payload?.passphrase)
+        .then(() => ProfileVault.unlock(payload?.passphrase))
+        .then(() => sendResponse({ status: "ok" }))
+        .catch((err) => sendResponse({ status: "error", error: err.message || "Failed to save profile" }));
+      return true;
+
+    case MESSAGE_TYPES.VAULT_CLEAR:
+      ProfileVault.clearProfile().then((res) => sendResponse(res));
+      return true;
 
     case MESSAGE_TYPES.CONTENT_SCRIPT_READY:
       if (sender.tab?.id) {
@@ -280,15 +306,34 @@ async function dispatchIntent(result, rawTranscript) {
  */
 async function handleFillFieldIntent(result) {
   const { field, value, profileKey } = result.slots || {};
+  let fillValue = value;
 
   if (profileKey) {
-    console.warn(
-      `[VERBA] "${field}" resolved to profile key "${profileKey}", but the vault has no ` +
-        "storage-backed save/retrieve yet - skipping until that's wired up."
-    );
-    return;
+    const vaultRes = await ProfileVault.fetchValue(profileKey);
+    if (vaultRes.status === "locked") {
+      chrome.runtime
+        .sendMessage(
+          createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, {
+            text: "Please unlock your profile in the side panel.",
+          })
+        )
+        .catch(() => {});
+      return;
+    }
+    if (vaultRes.status === "missing" || !vaultRes.value) {
+      chrome.runtime
+        .sendMessage(
+          createMessage(MESSAGE_TYPES.SPEAK_CONFIRMATION, {
+            text: `No ${profileKey} found in your saved profile.`,
+          })
+        )
+        .catch(() => {});
+      return;
+    }
+    fillValue = vaultRes.value;
   }
-  if (!field || !value) {
+
+  if (!field || !fillValue) {
     console.warn("[VERBA] FILL_FIELD intent missing a field or value:", result);
     return;
   }
@@ -353,8 +398,9 @@ async function handleFillFieldIntent(result) {
       return console.warn("[VERBA] Matched field has no selector:", matchedField);
     }
 
-    console.log(`[VERBA] Filling ${matchedField.selector} ("${best.label}") with "${value}" (score ${best.score.toFixed(3)})`);
-    requestFill(matchedField.selector, value, tabId);
+    // Never log raw decrypted value
+    console.log(`[VERBA] Filling ${matchedField.selector} ("${best.label}") (score ${best.score.toFixed(3)})`);
+    requestFill(matchedField.selector, fillValue, tabId);
   });
 }
 
