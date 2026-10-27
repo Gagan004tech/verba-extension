@@ -181,3 +181,4 @@ runTests().catch((err) => {
   console.error("Vault test failed:", err);
   process.exit(1);
 });
+

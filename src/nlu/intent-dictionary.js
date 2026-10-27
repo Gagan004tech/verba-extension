@@ -89,6 +89,7 @@ export const INTENT_DICTIONARY = {
   RESET_FORM: { description: "Clear every field on the form.", examples: ["reset the form"], zeroShotLabel: "resetting or clearing the entire form" },
   FOCUS_FIELD: { description: "Move keyboard focus to a field without filling it.", examples: ["go to the email field"], zeroShotLabel: "moving focus to a specific form field" },
   READ_SECTION: { description: "Read a named page section aloud.", examples: ["read out loud the introduction"], zeroShotLabel: "reading a specific named section of the page aloud" },
+  HELP: { description: "Provide spoken guidance on available voice commands.", examples: ["what can I say", "help"], zeroShotLabel: "asking for voice command help and guidance" },
 
   UNKNOWN: {
     description: "The utterance did not match any supported action.",

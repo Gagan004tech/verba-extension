@@ -330,6 +330,13 @@ export const REGEX_INTENTS = [
     slots: (match) => ({ destination: match[1].trim() }),
   },
 
+  // --------------------------------------------------------------- HELP
+  {
+    intent: "HELP",
+    pattern: /^(?:what\s+can\s+i\s+say|what\s+are\s+the\s+commands|help|show\s+help|voice\s+commands)$/i,
+    slots: () => ({}),
+  },
+
   // ---------------------------------------------------- CONFIRM / CANCEL
   // Month 2 Week 2: "yes/no" intents for the confirmation gate.
   // Must match bare affirmations and rejections deterministically before

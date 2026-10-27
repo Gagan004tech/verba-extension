@@ -165,3 +165,4 @@ export class FormSafety {
     await removeSessionStorage(GATE_STORAGE_KEY);
   }
 }
+
