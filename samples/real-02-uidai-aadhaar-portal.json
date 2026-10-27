@@ -1,0 +1,29 @@
+{
+  "url": "https://myaadhaar.uidai.gov.in/check-aadhaar-validity",
+  "fields": [
+    {
+      "name": "uidNumber",
+      "id": "aadhaarNumber",
+      "tag": "input",
+      "type": "text",
+      "label": "12 Digit Aadhaar Number",
+      "candidates": ["12 digit aadhaar number", "aadhaar number", "aadhaar", "uid", "unique identification number"]
+    },
+    {
+      "name": "captcha",
+      "id": "securityCode",
+      "tag": "input",
+      "type": "text",
+      "label": "Enter Captcha",
+      "candidates": ["enter captcha", "captcha", "security code"]
+    },
+    {
+      "name": "otp",
+      "id": "otpInput",
+      "tag": "input",
+      "type": "number",
+      "label": "Enter OTP",
+      "candidates": ["enter otp", "otp", "one time password", "verification code"]
+    }
+  ]
+}

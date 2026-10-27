@@ -769,7 +769,13 @@ async function handleFillFieldIntent(result) {
 
     const best = ranked[0];
 
+    if (best?.isAmbiguous && best.ambiguousOptions) {
+      speakFeedback(`Did you mean ${best.ambiguousOptions[0]} or ${best.ambiguousOptions[1]}?`, { urgent: true });
+      return;
+    }
+
     if (!best || !best.isConfident) {
+      speakFeedback(`Couldn't find a matching field for ${field}.`);
       return console.warn(`[VERBA] No confident field match for "${field}". Best guess:`, best);
     }
 

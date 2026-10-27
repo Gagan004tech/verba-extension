@@ -1,0 +1,21 @@
+{
+  "url": "https://netbanking.hdfcbank.com/netbanking/",
+  "fields": [
+    {
+      "name": "customerId",
+      "id": "fldLoginUserId",
+      "tag": "input",
+      "type": "text",
+      "label": "Customer ID / User ID",
+      "candidates": ["customer id / user id", "customer id", "user id", "login id"]
+    },
+    {
+      "name": "ipassword",
+      "id": "fldPassword",
+      "tag": "input",
+      "type": "password",
+      "label": "IPIN (NetBanking Password)",
+      "candidates": ["ipin (netbanking password)", "password", "netbanking password", "ipin"]
+    }
+  ]
+}

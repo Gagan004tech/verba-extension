@@ -1,0 +1,53 @@
+{
+  "url": "https://eportal.incometax.gov.in/iec/foservices/#/pre-login/register",
+  "fields": [
+    {
+      "name": "panNumber",
+      "id": "panNumber",
+      "tag": "input",
+      "type": "text",
+      "label": "Permanent Account Number (PAN)",
+      "candidates": ["permanent account number (pan)", "pan", "pan number", "enter pan"]
+    },
+    {
+      "name": "firstName",
+      "id": "fname",
+      "tag": "input",
+      "type": "text",
+      "label": "First Name (as per PAN)",
+      "candidates": ["first name (as per pan)", "first name", "given name"]
+    },
+    {
+      "name": "lastName",
+      "id": "lname",
+      "tag": "input",
+      "type": "text",
+      "label": "Last Name / Surname",
+      "candidates": ["last name / surname", "last name", "surname"]
+    },
+    {
+      "name": "dob",
+      "id": "dobPicker",
+      "tag": "input",
+      "type": "date",
+      "label": "Date of Birth (DD/MM/YYYY)",
+      "candidates": ["date of birth (dd/mm/yyyy)", "date of birth", "dob", "birth date"]
+    },
+    {
+      "name": "mobile",
+      "id": "primaryMobile",
+      "tag": "input",
+      "type": "tel",
+      "label": "Primary Mobile Number",
+      "candidates": ["primary mobile number", "mobile number", "mobile", "phone"]
+    },
+    {
+      "name": "email",
+      "id": "primaryEmail",
+      "tag": "input",
+      "type": "email",
+      "label": "Primary Email Address",
+      "candidates": ["primary email address", "primary email", "email address", "email"]
+    }
+  ]
+}

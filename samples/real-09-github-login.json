@@ -1,0 +1,21 @@
+{
+  "url": "https://github.com/login",
+  "fields": [
+    {
+      "name": "login",
+      "id": "login_field",
+      "tag": "input",
+      "type": "text",
+      "label": "Username or email address",
+      "candidates": ["username or email address", "username", "email address", "email", "login"]
+    },
+    {
+      "name": "password",
+      "id": "password",
+      "tag": "input",
+      "type": "password",
+      "label": "Password",
+      "candidates": ["password", "enter password"]
+    }
+  ]
+}

@@ -246,6 +246,20 @@
       add('search', 'keyshortcuts', 0.7);
     }
 
+    // <fieldset><legend> context (e.g. "Shipping Address Phone" vs "Billing Address Phone")
+    const fieldset = el.closest('fieldset');
+    if (fieldset) {
+      const legend = fieldset.querySelector('legend');
+      if (legend) {
+        const legText = cleanText(legend.textContent);
+        if (legText) {
+          add(legText, 'fieldset-legend', 0.85);
+          const primary = cleanText(el.getAttribute('placeholder') || el.getAttribute('aria-label') || el.name || '');
+          if (primary) add(`${legText} ${primary}`, 'fieldset-legend', 0.9);
+        }
+      }
+    }
+
     // name / id (humanized) as last-resort hints
     const name = el.getAttribute('name');
     if (name && (!looksGenerated(name) || name.toLowerCase() === 'q')) {
@@ -285,8 +299,41 @@
     }));
   }
 
+  function collectAllCandidates(root, results = []) {
+    if (!root) return results;
+    try {
+      const els = root.querySelectorAll('input, select, textarea, [role="searchbox"], [role="combobox"][contenteditable="true"], [contenteditable="true"]');
+      els.forEach((el) => results.push(el));
+    } catch (_) {}
+
+    // Open Shadow DOM traversal
+    try {
+      const allEls = root.querySelectorAll('*');
+      allEls.forEach((el) => {
+        if (el.shadowRoot) {
+          collectAllCandidates(el.shadowRoot, results);
+        }
+      });
+    } catch (_) {}
+
+    // Same-origin iframe traversal
+    try {
+      const iframes = root.querySelectorAll('iframe');
+      iframes.forEach((iframe) => {
+        try {
+          const doc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (doc) collectAllCandidates(doc, results);
+        } catch (e) {
+          window.__verba_has_cross_origin_iframe = true;
+        }
+      });
+    } catch (_) {}
+
+    return results;
+  }
+
   function scanFields() {
-    const candidates = document.querySelectorAll('input, select, textarea, [role="searchbox"], [role="combobox"][contenteditable="true"], [contenteditable="true"]');
+    const candidates = collectAllCandidates(document);
     const fields = [];
 
     candidates.forEach((el) => {

@@ -23,6 +23,7 @@ export const DEFAULT_FUSION_WEIGHTS = Object.freeze({
 // Tuned threshold: "pan" vs "phone" scores ~0.32 under fusion, while true
 // variants score >= 0.70. A threshold of 0.65 provides high recall with zero false positives.
 export const MATCH_THRESHOLD = 0.65;
+export const MATCH_MARGIN = 0.08;
 
 /**
  * Normalizes input text for comparison (lowercase, trimmed, collapsed whitespace).
@@ -215,7 +216,22 @@ export function rankFieldsFast(spokenPhrase, fields, options = {}) {
     };
   });
 
-  return results.sort((a, b) => b.score - a.score);
+  const sorted = results.sort((a, b) => b.score - a.score);
+  const margin = options.margin ?? MATCH_MARGIN;
+  if (sorted.length >= 2 && sorted[0].score >= threshold && sorted[1].score >= threshold) {
+    const normSpoken = normalizeLabel(spokenPhrase);
+    const top1Exact = normalizeLabel(sorted[0].label) === normSpoken || normalizeLabel(stripFormPrefixes(sorted[0].label)) === normSpoken;
+    const top2Exact = normalizeLabel(sorted[1].label) === normSpoken || normalizeLabel(stripFormPrefixes(sorted[1].label)) === normSpoken;
+
+    if (top1Exact && !top2Exact) {
+      // Unambiguous exact lexical match takes precedence over synonym
+    } else if ((sorted[0].score - sorted[1].score) < margin) {
+      sorted[0].isConfident = false;
+      sorted[0].isAmbiguous = true;
+      sorted[0].ambiguousOptions = [sorted[0].label, sorted[1].label];
+    }
+  }
+  return sorted;
 }
 
 /**
@@ -288,5 +304,20 @@ export async function rankFieldsFused(spokenPhrase, fields, options = {}) {
     };
   });
 
-  return results.sort((a, b) => b.score - a.score);
+  const sorted = results.sort((a, b) => b.score - a.score);
+  const margin = options.margin ?? MATCH_MARGIN;
+  if (sorted.length >= 2 && sorted[0].score >= threshold && sorted[1].score >= threshold) {
+    const normSpoken = normalizeLabel(spokenPhrase);
+    const top1Exact = normalizeLabel(sorted[0].label) === normSpoken || normalizeLabel(stripFormPrefixes(sorted[0].label)) === normSpoken;
+    const top2Exact = normalizeLabel(sorted[1].label) === normSpoken || normalizeLabel(stripFormPrefixes(sorted[1].label)) === normSpoken;
+
+    if (top1Exact && !top2Exact) {
+      // Unambiguous exact lexical match takes precedence over synonym
+    } else if ((sorted[0].score - sorted[1].score) < margin) {
+      sorted[0].isConfident = false;
+      sorted[0].isAmbiguous = true;
+      sorted[0].ambiguousOptions = [sorted[0].label, sorted[1].label];
+    }
+  }
+  return sorted;
 }

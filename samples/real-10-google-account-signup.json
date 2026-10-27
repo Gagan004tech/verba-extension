@@ -1,0 +1,45 @@
+{
+  "url": "https://accounts.google.com/signup",
+  "fields": [
+    {
+      "name": "firstName",
+      "id": "firstName",
+      "tag": "input",
+      "type": "text",
+      "label": "First name",
+      "candidates": ["first name", "name", "given name"]
+    },
+    {
+      "name": "lastName",
+      "id": "lastName",
+      "tag": "input",
+      "type": "text",
+      "label": "Last name (optional)",
+      "candidates": ["last name (optional)", "last name", "surname"]
+    },
+    {
+      "name": "username",
+      "id": "username",
+      "tag": "input",
+      "type": "text",
+      "label": "Choose your Gmail address",
+      "candidates": ["choose your gmail address", "username", "email", "gmail address"]
+    },
+    {
+      "name": "passwd",
+      "id": "passwd",
+      "tag": "input",
+      "type": "password",
+      "label": "Password",
+      "candidates": ["password", "enter a password"]
+    },
+    {
+      "name": "confirmPasswd",
+      "id": "confirmPasswd",
+      "tag": "input",
+      "type": "password",
+      "label": "Confirm your password",
+      "candidates": ["confirm your password", "confirm password", "verify password"]
+    }
+  ]
+}

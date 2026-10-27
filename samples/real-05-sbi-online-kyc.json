@@ -1,0 +1,37 @@
+{
+  "url": "https://retail.onlinesbi.sbi/retail/sbioverview.htm",
+  "fields": [
+    {
+      "name": "accountNumber",
+      "id": "accNum",
+      "tag": "input",
+      "type": "text",
+      "label": "Savings Account Number",
+      "candidates": ["savings account number", "account number", "account no", "bank account"]
+    },
+    {
+      "name": "cifNumber",
+      "id": "cifNum",
+      "tag": "input",
+      "type": "text",
+      "label": "CIF Number (from Passbook)",
+      "candidates": ["cif number (from passbook)", "cif number", "cif"]
+    },
+    {
+      "name": "branchCode",
+      "id": "branchCode",
+      "tag": "input",
+      "type": "text",
+      "label": "5-Digit Branch Code",
+      "candidates": ["5-digit branch code", "branch code", "sbi branch"]
+    },
+    {
+      "name": "registeredMobile",
+      "id": "mobileNumber",
+      "tag": "input",
+      "type": "tel",
+      "label": "Registered Mobile Number",
+      "candidates": ["registered mobile number", "mobile number", "mobile", "phone"]
+    }
+  ]
+}

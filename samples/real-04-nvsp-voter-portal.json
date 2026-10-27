@@ -1,0 +1,45 @@
+{
+  "url": "https://voters.eci.gov.in/form6",
+  "fields": [
+    {
+      "name": "epicNumber",
+      "id": "epicNo",
+      "tag": "input",
+      "type": "text",
+      "label": "EPIC / Voter ID Number",
+      "candidates": ["epic / voter id number", "epic number", "voter id", "voter card number"]
+    },
+    {
+      "name": "state",
+      "id": "stateCode",
+      "tag": "select",
+      "type": "select",
+      "label": "Select State",
+      "candidates": ["select state", "state", "province"]
+    },
+    {
+      "name": "district",
+      "id": "districtCode",
+      "tag": "select",
+      "type": "select",
+      "label": "Select District",
+      "candidates": ["select district", "district", "city"]
+    },
+    {
+      "name": "relativeName",
+      "id": "relativeName",
+      "tag": "input",
+      "type": "text",
+      "label": "Name of Father / Mother / Husband",
+      "candidates": ["name of father / mother / husband", "relative name", "father's name", "guardian name"]
+    },
+    {
+      "name": "pincode",
+      "id": "pincode",
+      "tag": "input",
+      "type": "number",
+      "label": "Postal PIN Code",
+      "candidates": ["postal pin code", "pin code", "pincode", "zip code", "postal code"]
+    }
+  ]
+}

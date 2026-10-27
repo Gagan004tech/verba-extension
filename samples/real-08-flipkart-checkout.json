@@ -1,0 +1,53 @@
+{
+  "url": "https://www.flipkart.com/checkout/init",
+  "fields": [
+    {
+      "name": "shippingName",
+      "id": "ship_name",
+      "tag": "input",
+      "type": "text",
+      "label": "Shipping Name",
+      "candidates": ["shipping name", "shipping address name", "name", "full name"]
+    },
+    {
+      "name": "shippingPhone",
+      "id": "ship_phone",
+      "tag": "input",
+      "type": "tel",
+      "label": "Shipping 10-digit mobile number",
+      "candidates": ["shipping 10-digit mobile number", "shipping mobile number", "shipping phone", "mobile number", "phone"]
+    },
+    {
+      "name": "billingPhone",
+      "id": "bill_phone",
+      "tag": "input",
+      "type": "tel",
+      "label": "Billing Contact Phone",
+      "candidates": ["billing contact phone", "billing mobile number", "billing phone", "mobile number", "phone"]
+    },
+    {
+      "name": "pincode",
+      "id": "pincode",
+      "tag": "input",
+      "type": "text",
+      "label": "Pincode",
+      "candidates": ["pincode", "pin code", "zip code", "postal code"]
+    },
+    {
+      "name": "locality",
+      "id": "locality",
+      "tag": "input",
+      "type": "text",
+      "label": "Locality",
+      "candidates": ["locality", "area", "neighborhood"]
+    },
+    {
+      "name": "address",
+      "id": "addressLine",
+      "tag": "textarea",
+      "type": "textarea",
+      "label": "Address (Area and Street)",
+      "candidates": ["address (area and street)", "address", "street address"]
+    }
+  ]
+}

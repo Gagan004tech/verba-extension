@@ -1,0 +1,69 @@
+{
+  "url": "https://www.amazon.in/a/addresses/add",
+  "fields": [
+    {
+      "name": "country",
+      "id": "address-ui-widgets-countryCode",
+      "tag": "select",
+      "type": "select",
+      "label": "Country/Region",
+      "candidates": ["country/region", "country", "region"]
+    },
+    {
+      "name": "fullName",
+      "id": "address-ui-widgets-enterAddressFullName",
+      "tag": "input",
+      "type": "text",
+      "label": "Full name (First and Last name)",
+      "candidates": ["full name (first and last name)", "full name", "name", "recipient name"]
+    },
+    {
+      "name": "mobileNumber",
+      "id": "address-ui-widgets-enterAddressPhoneNumber",
+      "tag": "input",
+      "type": "tel",
+      "label": "Mobile number",
+      "candidates": ["mobile number", "phone number", "phone", "contact number"]
+    },
+    {
+      "name": "postalCode",
+      "id": "address-ui-widgets-enterAddressPostalCode",
+      "tag": "input",
+      "type": "text",
+      "label": "Pincode",
+      "candidates": ["pincode", "6 digits [0-9] pin code", "pin code", "zip code", "postal code"]
+    },
+    {
+      "name": "addressLine1",
+      "id": "address-ui-widgets-enterAddressLine1",
+      "tag": "input",
+      "type": "text",
+      "label": "Flat, House no., Building, Company, Apartment",
+      "candidates": ["flat, house no., building, company, apartment", "address line 1", "street address", "address"]
+    },
+    {
+      "name": "addressLine2",
+      "id": "address-ui-widgets-enterAddressLine2",
+      "tag": "input",
+      "type": "text",
+      "label": "Area, Street, Sector, Village",
+      "candidates": ["area, street, sector, village", "address line 2", "locality", "area"]
+    },
+    {
+      "name": "city",
+      "id": "address-ui-widgets-enterAddressCity",
+      "tag": "input",
+      "type": "text",
+      "label": "Town/City",
+      "candidates": ["town/city", "town", "city"]
+    },
+    {
+      "name": "state",
+      "id": "address-ui-widgets-enterAddressStateOrRegion",
+      "tag": "select",
+      "type": "select",
+      "label": "State",
+      "candidates": ["state", "province", "state / region"]
+    }
+  ]
+}

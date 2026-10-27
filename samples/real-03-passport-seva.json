@@ -1,0 +1,53 @@
+{
+  "url": "https://portal2.passportindia.gov.in/AppOnlineProject/user/RegistrationBaseAction",
+  "fields": [
+    {
+      "name": "passportOffice",
+      "id": "dspoCode",
+      "tag": "select",
+      "type": "select",
+      "label": "Passport Office",
+      "candidates": ["passport office", "location", "regional passport office"]
+    },
+    {
+      "name": "givenName",
+      "id": "givenName",
+      "tag": "input",
+      "type": "text",
+      "label": "Given Name (First Name + Middle Name)",
+      "candidates": ["given name (first name + middle name)", "given name", "first name", "applicant name"]
+    },
+    {
+      "name": "surname",
+      "id": "surname",
+      "tag": "input",
+      "type": "text",
+      "label": "Surname",
+      "candidates": ["surname", "last name", "family name"]
+    },
+    {
+      "name": "dob",
+      "id": "dob",
+      "tag": "input",
+      "type": "date",
+      "label": "Date of Birth (DD/MM/YYYY)",
+      "candidates": ["date of birth (dd/mm/yyyy)", "date of birth", "dob"]
+    },
+    {
+      "name": "email",
+      "id": "email",
+      "tag": "input",
+      "type": "email",
+      "label": "E-mail Id",
+      "candidates": ["e-mail id", "email id", "email address", "email"]
+    },
+    {
+      "name": "loginId",
+      "id": "loginId",
+      "tag": "input",
+      "type": "text",
+      "label": "Login Id",
+      "candidates": ["login id", "user id", "username"]
+    }
+  ]
+}

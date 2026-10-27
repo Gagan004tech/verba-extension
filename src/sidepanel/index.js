@@ -81,6 +81,14 @@ chrome.runtime.onMessage.addListener((message) => {
     ttsQueue.resume();
   }
 
+  if (message.type === MESSAGE_TYPES.NLU_STATUS) {
+    if (message.payload?.status === "loading") {
+      if (statusDiv) statusDiv.textContent = "Preparing voice engine...";
+    } else if (message.payload?.status === "ready") {
+      if (statusDiv) statusDiv.textContent = shouldBeListening ? "Listening..." : "Ready";
+    }
+  }
+
   // P2's parsed intent, broadcast from the background broker after every
   // transcript - shown here as formatted JSON so it's visible without
   // needing to open the service worker's own devtools.
