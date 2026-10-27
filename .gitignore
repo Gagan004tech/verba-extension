@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.vite/
+*.log
+docs/P2_COMMAND_UNDERSTANDING_AND_MATCHING_REPORT.md

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VERBA Microphone Authorization</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 40px;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Allow Microphone for VERBA</h2>
+  <p>Chrome requires granting microphone permissions in a dedicated tab before the side panel can access it.</p>
+    <button id="grant-btn">Allow Microphone Access</button>
+  <script src="permission.js"></script>
+</body>
+</html>

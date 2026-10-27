@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VERBA test 03 - messy labels</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 32px auto; padding: 0 16px; }
+  .row { margin: 14px 0; }
+  input, select, textarea { padding: 8px; font-size: 16px; }
+  td { padding: 6px 10px 6px 0; }
+  .note { background: #fff8db; padding: 10px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>Messy labels</h1>
+<p class="note">Each field describes itself differently. Run <code>requestScan()</code> and check that the
+<code>label</code> of each is what a person would call it (expected label in brackets).</p>
+
+<!-- 1. wrapping label [First name] -->
+<div class="row"><label>First name <input name="fn"></label></div>
+
+<!-- 2. sibling text only, no label element [PAN number] -->
+<div class="row"><span>PAN Number</span> <input name="pan_no"></div>
+
+<!-- 3. text then <br> [Mobile] -->
+<div class="row">Mobile:<br><input id="x_81f3a9c2d4e5"></div>
+
+<!-- 4. aria-labelledby [Aadhaar number] -->
+<div class="row"><span id="aad">Aadhaar number</span> <input aria-labelledby="aad"></div>
+
+<!-- 5. aria-label only [Search] -->
+<div class="row"><input aria-label="Search" id=":r1:"></div>
+
+<!-- 6. placeholder only [Enter your city] -->
+<div class="row"><input placeholder="Enter your city"></div>
+
+<!-- 7. table layout [Pincode] -->
+<table><tr><td>Pincode</td><td><input name="zip"></td></tr></table>
+
+<!-- 8. autocomplete token only [given name] -->
+<div class="row"><input autocomplete="given-name"></div>
+
+<!-- 9. radio group with fieldset legend (group = Gender) -->
+<fieldset class="row"><legend>Gender</legend>
+  <label><input type="radio" name="g" value="m"> Male</label>
+  <label><input type="radio" name="g" value="f"> Female</label>
+</fieldset>
+
+<!-- 10. checkbox [I agree to the terms] -->
+<div class="row"><label><input type="checkbox" name="terms"> I agree to the terms</label></div>
+
+<!-- 11. date [Date of birth], select [State] -->
+<div class="row"><label for="dob">Date of birth</label> <input id="dob" type="date"></div>
+<div class="row"><label for="state">State</label>
+  <select id="state"><option value="">Select</option><option value="KL">Kerala</option><option value="KA">Karnataka</option></select></div>
+
+<!-- 12. hidden + disabled + button: must NOT be listed -->
+<input type="hidden" name="csrf" value="x">
+<input name="locked" value="n/a" disabled>
+<button type="button">Not a field</button>
+
+<!-- 13. visually hidden field: listed with visible:false -->
+<div class="row"><input name="honeypot" style="display:none"></div>
+</body>
+</html>

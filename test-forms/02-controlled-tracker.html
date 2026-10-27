@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VERBA test 02 - controlled inputs (React-style value tracker)</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+  label { display: block; margin-top: 14px; font-weight: 600; }
+  input, select { width: 100%; padding: 8px; font-size: 16px; box-sizing: border-box; }
+  pre { background: #111; color: #9ef; padding: 12px; border-radius: 6px; }
+  .note { background: #fff8db; padding: 10px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>Controlled inputs (framework-style)</h1>
+<p class="note">This page copies how React tracks input values. Setting <code>el.value = "x"</code> and
+firing <code>input</code> is ignored, so the state box below stays empty. Filling through the prototype
+setter (W4 injector) updates it. <b>Pass = the state box shows what you filled.</b></p>
+
+<label for="fullName">Full name</label>
+<input id="fullName" name="fullName" data-controlled autocomplete="name">
+
+<label for="email">Email address</label>
+<input id="email" name="email" type="email" data-controlled>
+
+<label for="mobile">Mobile number</label>
+<input id="mobile" name="mobile" type="tel" data-controlled>
+
+<label for="city">City</label>
+<select id="city" name="city" data-controlled>
+  <option value="">Choose a city</option>
+  <option value="tvm">Thiruvananthapuram</option>
+  <option value="kochi">Kochi</option>
+  <option value="blr">Bengaluru</option>
+</select>
+
+<h3>App state (what the "framework" believes)</h3>
+<pre id="state">{}</pre>
+
+<script>
+  var state = {};
+  var pre = document.getElementById('state');
+  function render() { pre.textContent = JSON.stringify(state, null, 2); }
+
+  // Same idea as React's inputValueTracking: remember the last value the
+  // framework knows about, and ignore events where the DOM value equals it.
+  function attachTracker(el) {
+    var proto = Object.getPrototypeOf(el);
+    var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    var known = String(el.value);
+    Object.defineProperty(el, 'value', {
+      configurable: true,
+      get: function () { return desc.get.call(this); },
+      set: function (v) { known = String(v); desc.set.call(this, v); }   // instance setter updates the tracker
+    });
+    return { known: function () { return known; }, update: function (v) { known = String(v); }, read: function () { return desc.get.call(el); } };
+  }
+
+  document.querySelectorAll('[data-controlled]').forEach(function (el) {
+    var t = attachTracker(el);
+    function onChange() {
+      var now = t.read();
+      if (now === t.known()) return;        // "nothing changed" - event dropped
+      t.update(now);
+      state[el.name] = now;
+      render();
+    }
+    el.addEventListener('input', onChange);
+    el.addEventListener('change', onChange);
+  });
+</script>
+</body>
+</html>
