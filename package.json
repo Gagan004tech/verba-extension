@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node src/vault/vault.test.mjs && node src/sidepanel/tts-queue.test.mjs && node src/content/content-actions.test.mjs && node src/nlu/regex-intents.test.mjs && node src/nlu/field-action-dataset.test.mjs && node src/matching/fused-matcher.test.mjs && node src/matching/test-p3-samples.test.mjs && node src/nlu/evaluate-utterances.mjs",
+    "test": "node src/vault/vault.test.mjs && node src/sidepanel/tts-queue.test.mjs && node src/content/content-actions.test.mjs && node src/safety/form-safety.test.mjs && node src/nlu/regex-intents.test.mjs && node src/nlu/field-action-dataset.test.mjs && node src/matching/fused-matcher.test.mjs && node src/matching/test-p3-samples.test.mjs && node src/nlu/evaluate-utterances.mjs",
     "test:nlu": "node src/nlu/regex-intents.test.mjs && node src/nlu/field-action-dataset.test.mjs",
     "test:matching": "node src/matching/fused-matcher.test.mjs && node src/matching/test-p3-samples.test.mjs",
     "benchmark": "node src/nlu/evaluate-utterances.mjs"

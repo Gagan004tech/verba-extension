@@ -2,6 +2,7 @@ import { MESSAGE_TYPES, createMessage } from "../shared/message-types.js";
 import { parseIntents, parseIntent } from "../nlu/intent-parser.js";
 import { rankFieldsFused, rankFieldsFast, MATCH_THRESHOLD } from "../matching/fused-matcher.js";
 import { ProfileVault } from "../vault/vault.js";
+import { FormSafety } from "../safety/form-safety.js";
 
 // Enable the side panel to open on action icon click
 chrome.sidePanel
@@ -215,50 +216,96 @@ async function dispatchIntent(result, rawTranscript) {
     chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.TTS_RESUME)).catch(() => {});
   }
 
-  // 1. Check Confirmation Gate State
-  if (pendingConfirmation) {
-    if (intent === "CONFIRM") {
-      console.log("[VERBA][Gate] User confirmed action:", pendingConfirmation.action);
-      const actionToExecute = pendingConfirmation;
-      pendingConfirmation = null;
-
-      chrome.runtime
-        .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "confirmed", action: actionToExecute.action }))
-        .catch(() => {});
-
-      speakFeedback("Action confirmed. Proceeding.", { urgent: true });
-
-      if (actionToExecute.action === "SUBMIT") {
-        requestAction({ action: "SUBMIT" }, actionToExecute.tabId);
-      } else if (actionToExecute.action === "FILL_FIELD") {
-        requestFill(actionToExecute.selector, actionToExecute.value, actionToExecute.tabId);
+  // Undo last fill / "clear that"
+  if (normText === "undo" || normText === "undo last fill" || normText === "clear that" || normText === "erase that") {
+    const undone = await FormSafety.undoLastFill();
+    if (undone) {
+      const tabId = await getTargetTabId();
+      if (tabId && undone.selector) {
+        requestFill(undone.selector, undone.previousValue || "", tabId);
+        speakFeedback(`Undid fill for ${undone.field}.`);
       }
-      return;
+    } else {
+      speakFeedback("Nothing to undo.");
     }
+    return;
+  }
 
-    if (intent === "CANCEL") {
-      console.log("[VERBA][Gate] User cancelled action:", pendingConfirmation.action);
-      pendingConfirmation = null;
+  // 1. Check Confirmation Gate State (persisted in session storage across restarts)
+  const pendingGate = await FormSafety.getPendingGate();
+  if (pendingGate) {
+    if (pendingGate.expired) {
+      if (intent === "CONFIRM") {
+        speakFeedback("Confirmation request timed out after 30 seconds. Please say submit again.", { urgent: true });
+        return;
+      }
+    } else {
+      // Gate is active
+      if (intent === "CONFIRM") {
+        console.log("[VERBA][Gate] User confirmed form submission");
+        await FormSafety.clearGate();
+        await FormSafety.clearSessionFills();
 
-      chrome.runtime
-        .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "cancelled" }))
-        .catch(() => {});
+        chrome.runtime
+          .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "confirmed", action: "SUBMIT" }))
+          .catch(() => {});
 
-      speakFeedback("Action cancelled.", { urgent: true });
-      return;
+        speakFeedback("Action confirmed. Submitting form.", { urgent: true });
+        requestAction({ action: "SUBMIT" }, pendingGate.tabId);
+        return;
+      }
+
+      if (intent === "CANCEL") {
+        console.log("[VERBA][Gate] User cancelled form submission");
+        await FormSafety.clearGate();
+
+        chrome.runtime
+          .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "cancelled" }))
+          .catch(() => {});
+
+        speakFeedback("Submission cancelled. You can continue editing the form.", { urgent: true });
+        return;
+      }
+
+      if (normText === "read it again" || normText === "read again" || normText === "repeat" || normText === "repeat that" || normText === "say it again") {
+        speakFeedback(pendingGate.summaryText, { urgent: true });
+        return;
+      }
+
+      const changeMatch = normText.match(/^(?:change|modify|correct)\s+(?:the\s+)?(.+?)(?:\s+field)?$/i);
+      if (changeMatch) {
+        const fieldToChange = changeMatch[1].trim();
+        speakFeedback(`What would you like to set ${fieldToChange} to?`, { urgent: true });
+        return;
+      }
     }
   }
 
-  // 2. Intercept sensitive / final actions via Confirmation Gate
+  // 2. Intercept SUBMIT action via Confirmation Gate
   if (intent === "SUBMIT") {
     const tabId = await getTargetTabId();
-    pendingConfirmation = { action: "SUBMIT", tabId, timestamp: Date.now() };
+    const sessionFills = await FormSafety.getSessionFills();
+    const summary = FormSafety.generateSubmissionSummary(sessionFills);
+    const gate = await FormSafety.createGate(tabId, summary);
 
-    speakFeedback("Are you sure you want to submit the form? Say yes to confirm, or no to cancel.", { urgent: true });
+    speakFeedback(summary, { urgent: true });
 
     chrome.runtime
       .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_REQUIRED, { action: "SUBMIT" }))
       .catch(() => {});
+
+    // Announce expiration after 30s
+    setTimeout(async () => {
+      const current = await FormSafety.getPendingGate();
+      if (current && !current.expired && current.timestamp === gate.timestamp) {
+        await FormSafety.clearGate();
+        speakFeedback("Pending submission confirmation expired after 30 seconds.", { urgent: true });
+        chrome.runtime
+          .sendMessage(createMessage(MESSAGE_TYPES.CONFIRMATION_RESOLVED, { status: "cancelled", reason: "timeout" }))
+          .catch(() => {});
+      }
+    }, FormSafety.GATE_TIMEOUT_MS);
+
     return;
   }
 
@@ -734,6 +781,16 @@ async function handleFillFieldIntent(result) {
     // Never log raw decrypted value
     console.log(`[VERBA] Filling ${matchedField.selector} ("${best.label}") (score ${best.score.toFixed(3)})`);
     requestFill(matchedField.selector, fillValue, tabId);
+
+    // Form Safety: record fill and speak character-by-character readback for sensitive fields
+    await FormSafety.recordFill({
+      field: best.label || field,
+      selector: matchedField.selector,
+      value: fillValue,
+    });
+
+    const spokenVal = FormSafety.formatReadbackValue(best.label || field, fillValue);
+    speakFeedback(`${best.label || field}: ${spokenVal}.`);
   });
 }
 
